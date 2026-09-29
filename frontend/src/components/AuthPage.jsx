@@ -113,7 +113,7 @@ export default function AuthPage({ onAuthSuccess }) {
           role: "Verified Member",
         };
 
-        onAuthSuccess(authedUser);
+        onAuthSuccess(authedUser, { isNewAccount: true });
       } else {
         // Login flow
         const loginRes = await loginUser({
@@ -144,7 +144,7 @@ export default function AuthPage({ onAuthSuccess }) {
               role: "Verified Member",
             };
 
-        onAuthSuccess(authedUser);
+        onAuthSuccess(authedUser, { isNewAccount: false });
       }
     } catch (err) {
       console.error("Auth error:", err);

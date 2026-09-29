@@ -461,6 +461,8 @@ async def get_chat_app():
         return _chat_app
 
     conn_string = settings.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
+    # psycopg expects 'sslmode' instead of 'ssl' (which asyncpg uses)
+    conn_string = conn_string.replace("?ssl=", "?sslmode=").replace("&ssl=", "&sslmode=")
 
     async with await psycopg.AsyncConnection.connect(conn_string, autocommit=True) as setup_conn:
         setup_checkpointer = AsyncPostgresSaver(setup_conn)

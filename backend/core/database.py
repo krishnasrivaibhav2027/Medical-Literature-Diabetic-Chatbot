@@ -42,6 +42,8 @@ async def ensure_database_exists() -> None:
     db_url = settings.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
     parsed = urlparse(db_url)
     db_name = parsed.path.lstrip("/")
+    if not db_name or db_name.lower() == "postgres":
+        return
 
     # Connect to the default 'postgres' maintenance database to check/create the target database
     admin_conn_str = f"postgresql://{parsed.username}:{parsed.password}@{parsed.hostname}:{parsed.port or 5432}/postgres"

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { Sun, Moon } from "lucide-react";
 import Sidebar from "./components/Sidebar";
 import ChatArea from "./components/ChatArea";
@@ -28,6 +29,9 @@ import {
 } from "./services/api";
 
 export default function App() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
   // Authentication state (null if not logged in)
   const [user, setUser] = useState(() => {
     const saved = localStorage.getItem("rag_chat_user");
@@ -37,7 +41,7 @@ export default function App() {
   // Strict route authorization view: 'authenticated' | 'forbidden' | 'login'
   const [authView, setAuthView] = useState(() => {
     const token = localStorage.getItem("access_token");
-    return token ? "authenticated" : "forbidden";
+    return token ? "authenticated" : "login";
   });
 
   const [settings, setSettings] = useState(() => {
@@ -99,7 +103,7 @@ export default function App() {
     const token = localStorage.getItem("access_token");
     if (!token) {
       setUser(null);
-      setAuthView("forbidden");
+      setAuthView("login");
       return;
     }
 
@@ -115,14 +119,18 @@ export default function App() {
           localStorage.removeItem("access_token");
           localStorage.removeItem("rag_chat_user");
           setUser(null);
-          setAuthView("forbidden");
+          setAuthView("login");
         }
       })
-      .catch(() => {
+      .catch((err) => {
         localStorage.removeItem("access_token");
         localStorage.removeItem("rag_chat_user");
         setUser(null);
-        setAuthView("forbidden");
+        if (err?.response?.status === 403) {
+          navigate("/forbidden");
+        } else {
+          navigate("/login");
+        }
       });
   }, []);
 
@@ -143,6 +151,22 @@ export default function App() {
     const saved = localStorage.getItem("rag_active_thread_id");
     return saved || null;
   });
+
+  // Synchronize browser URL route (/chat or /chat/:threadId) with activeThreadId
+  useEffect(() => {
+    if (location.pathname.startsWith("/chat/")) {
+      const urlThreadId = location.pathname.substring("/chat/".length);
+      if (urlThreadId && urlThreadId !== activeThreadId) {
+        setActiveThreadId(urlThreadId);
+        localStorage.setItem("rag_active_thread_id", urlThreadId);
+      }
+    } else if (location.pathname === "/chat") {
+      if (activeThreadId) {
+        setActiveThreadId(null);
+        localStorage.removeItem("rag_active_thread_id");
+      }
+    }
+  }, [location.pathname]);
 
   // Dynamic greeting state for empty chat
   const [greetingData, setGreetingData] = useState(() =>
@@ -252,10 +276,16 @@ export default function App() {
   }, [activeThreadId, threads.length]);
 
   // Auth Success Handler: immediately called post-signup or post-login
-  const handleAuthSuccess = async (authedUser) => {
+  const handleAuthSuccess = async (authedUser, meta = {}) => {
     setUser(authedUser);
     localStorage.setItem("rag_chat_user", JSON.stringify(authedUser));
     setAuthView("authenticated");
+    navigate("/chat");
+
+    // Immediately display the BYOK modal popup post creation of an account
+    if (meta.isNewAccount) {
+      setIsSettingsOpen(true);
+    }
 
     // Refresh greeting with newly signed-up username
     setGreetingData(generateDynamicGreeting(authedUser.username || "there"));
@@ -301,11 +331,10 @@ export default function App() {
     if (isGenerating) {
       handleAbortGeneration();
     }
-    if (!activeThreadId || (activeThread && activeThread.messages.length === 0)) {
-      return;
-    }
     setActiveThreadId(null);
+    localStorage.removeItem("rag_active_thread_id");
     setGreetingData(generateDynamicGreeting(user?.username || "there"));
+    navigate("/chat");
   };
 
   // Select existing thread
@@ -314,7 +343,9 @@ export default function App() {
       handleAbortGeneration();
     }
     setActiveThreadId(threadId);
+    localStorage.setItem("rag_active_thread_id", threadId);
     setGreetingData(generateDynamicGreeting(user?.username || "there"));
+    navigate(`/chat/${threadId}`);
 
     // If thread history is not loaded yet, fetch from backend
     const target = threads.find((t) => t.thread_id === threadId);
@@ -361,8 +392,10 @@ export default function App() {
     if (activeThreadId === threadId) {
       if (updated.length > 0) {
         setActiveThreadId(updated[0].thread_id);
+        navigate(`/chat/${updated[0].thread_id}`);
       } else {
         setActiveThreadId(null);
+        navigate("/chat");
       }
     }
     showToast("Conversation deleted", "info");
@@ -455,6 +488,8 @@ export default function App() {
         ...prev.filter((t) => t.thread_id !== targetThreadId),
       ]);
       setActiveThreadId(targetThreadId);
+      localStorage.setItem("rag_active_thread_id", targetThreadId);
+      navigate(`/chat/${targetThreadId}`, { replace: true });
       preGenerationSnapshotRef.current = {
         threadId: targetThreadId,
         messages: [],
@@ -597,7 +632,7 @@ export default function App() {
         localStorage.removeItem("access_token");
         localStorage.removeItem("rag_chat_user");
         setUser(null);
-        setAuthView("forbidden");
+        navigate("/forbidden");
         showToast("Access forbidden: session expired or unauthorized.", "error");
       } else {
         console.error("Chat error:", err);
@@ -759,7 +794,7 @@ export default function App() {
         localStorage.removeItem("access_token");
         localStorage.removeItem("rag_chat_user");
         setUser(null);
-        setAuthView("forbidden");
+        navigate("/forbidden");
         showToast("Access forbidden: session expired or unauthorized.", "error");
       } else {
         console.error("Regeneration error:", err);
@@ -780,7 +815,11 @@ export default function App() {
   const handleConfirmLogout = async () => {
     const token = localStorage.getItem("access_token");
     if (token) {
-      await logoutUser(token);
+      try {
+        await logoutUser(token);
+      } catch (err) {
+        console.warn("Logout error:", err);
+      }
     }
     localStorage.removeItem("access_token");
     localStorage.removeItem("rag_chat_user");
@@ -790,202 +829,207 @@ export default function App() {
     setThreads([]);
     setActiveThreadId(null);
     setIsLogoutOpen(false);
-    setAuthView("login");
+    navigate("/login", { replace: true });
     showToast("Signed out successfully", "info");
   };
 
-  // If user is unauthenticated, render the 403 Forbidden Access Denied barrier
-  if (authView === "forbidden") {
+  const renderThemeToggle = (id) => (
+    <div className="auth-top-actions">
+      <button
+        id={id}
+        className="theme-toggle-switch"
+        onClick={toggleTheme}
+        title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+        aria-label="Toggle dark and light mode"
+      >
+        <div className={`theme-switch-track ${theme}`}>
+          <div className="theme-switch-icons">
+            <Sun size={12} className="switch-icon sun" />
+            <Moon size={12} className="switch-icon moon" />
+          </div>
+          <div className="theme-switch-thumb">
+            {theme === "dark" ? (
+              <Moon size={11} className="thumb-icon" />
+            ) : (
+              <Sun size={11} className="thumb-icon" />
+            )}
+          </div>
+        </div>
+        <span className="theme-switch-label">
+          {theme === "dark" ? "Dark" : "Light"}
+        </span>
+      </button>
+    </div>
+  );
+
+  const renderChatLayout = () => {
+    const token = localStorage.getItem("access_token");
+    if (!token && !user) {
+      return <Navigate to="/login" replace />;
+    }
+
     return (
-      <div className="app-root-unauthed">
-        <div className="auth-top-actions">
-          <button
-            id="auth-theme-toggle-btn"
-            className="theme-toggle-switch"
-            onClick={toggleTheme}
-            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-            aria-label="Toggle dark and light mode"
-          >
-            <div className={`theme-switch-track ${theme}`}>
-              <div className="theme-switch-icons">
-                <Sun size={12} className="switch-icon sun" />
-                <Moon size={12} className="switch-icon moon" />
-              </div>
-              <div className="theme-switch-thumb">
-                {theme === "dark" ? (
-                  <Moon size={11} className="thumb-icon" />
-                ) : (
-                  <Sun size={11} className="thumb-icon" />
-                )}
-              </div>
-            </div>
-            <span className="theme-switch-label">
-              {theme === "dark" ? "Dark" : "Light"}
-            </span>
-          </button>
-        </div>
-        <ForbiddenPage onGoToLogin={() => setAuthView("login")} />
-        <Toast toast={toast} onClose={() => setToast(null)} />
-      </div>
-    );
-  }
-
-  // If user navigated to login or has not yet authenticated
-  if (authView === "login" || !user) {
-    return (
-      <div className="app-root-unauthed">
-        <div className="auth-top-actions">
-          <button
-            id="auth-theme-toggle-btn"
-            className="theme-toggle-switch"
-            onClick={toggleTheme}
-            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-            aria-label="Toggle dark and light mode"
-          >
-            <div className={`theme-switch-track ${theme}`}>
-              <div className="theme-switch-icons">
-                <Sun size={12} className="switch-icon sun" />
-                <Moon size={12} className="switch-icon moon" />
-              </div>
-              <div className="theme-switch-thumb">
-                {theme === "dark" ? (
-                  <Moon size={11} className="thumb-icon" />
-                ) : (
-                  <Sun size={11} className="thumb-icon" />
-                )}
-              </div>
-            </div>
-            <span className="theme-switch-label">
-              {theme === "dark" ? "Dark" : "Light"}
-            </span>
-          </button>
-        </div>
-        <AuthPage onAuthSuccess={handleAuthSuccess} />
-        <Toast toast={toast} onClose={() => setToast(null)} />
-      </div>
-    );
-  }
-
-  return (
-    <div className="app-layout-root">
-      {/* Left Sidebar */}
-      <Sidebar
-        threads={threads}
-        activeThreadId={activeThreadId}
-        onSelectThread={handleSelectThread}
-        onNewChat={handleNewChat}
-        onDeleteThread={handleDeleteThread}
-        onRenameThread={handleRenameThread}
-        onClearAllThreads={handleClearAllThreads}
-        onOpenSettings={() => setIsSettingsOpen(true)}
-        onOpenLogout={() => setIsLogoutOpen(true)}
-        user={user}
-        isCollapsed={isSidebarCollapsed}
-        onToggleCollapse={toggleSidebar}
-      />
-
-      {/* Main Chat Viewport */}
-      <main className="main-chat-viewport">
-        {/* Top Right Theme Toggle Switch */}
-        <div className="chat-top-actions">
-          <button
-            id="chat-theme-toggle-btn"
-            className="theme-toggle-switch"
-            onClick={toggleTheme}
-            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-            aria-label="Toggle dark and light mode"
-          >
-            <div className={`theme-switch-track ${theme}`}>
-              <div className="theme-switch-icons">
-                <Sun size={12} className="switch-icon sun" />
-                <Moon size={12} className="switch-icon moon" />
-              </div>
-              <div className="theme-switch-thumb">
-                {theme === "dark" ? (
-                  <Moon size={11} className="thumb-icon" />
-                ) : (
-                  <Sun size={11} className="thumb-icon" />
-                )}
-              </div>
-            </div>
-            <span className="theme-switch-label">
-              {theme === "dark" ? "Dark" : "Light"}
-            </span>
-          </button>
-        </div>
-
-        {/* Chat Messages / Greeting Screen */}
-        <ChatArea
-          thread={activeThread}
+      <div className="app-layout-root">
+        {/* Left Sidebar */}
+        <Sidebar
+          threads={threads}
+          activeThreadId={activeThreadId}
+          onSelectThread={handleSelectThread}
+          onNewChat={handleNewChat}
+          onDeleteThread={handleDeleteThread}
+          onRenameThread={handleRenameThread}
+          onClearAllThreads={handleClearAllThreads}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+          onOpenLogout={() => setIsLogoutOpen(true)}
           user={user}
-          greetingData={greetingData}
-          onSendMessage={handleSendMessage}
-          onRegenerate={handleRegenerate}
-          onInspectSources={handleInspectSources}
-          isGenerating={isGenerating}
-          streamingMessage={streamingMessage}
+          isCollapsed={isSidebarCollapsed}
+          onToggleCollapse={toggleSidebar}
+        />
+
+        {/* Main Chat Viewport */}
+        <main className="main-chat-viewport">
+          <div className="chat-top-actions">
+            <button
+              id="chat-theme-toggle-btn"
+              className="theme-toggle-switch"
+              onClick={toggleTheme}
+              title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              aria-label="Toggle dark and light mode"
+            >
+              <div className={`theme-switch-track ${theme}`}>
+                <div className="theme-switch-icons">
+                  <Sun size={12} className="switch-icon sun" />
+                  <Moon size={12} className="switch-icon moon" />
+                </div>
+                <div className="theme-switch-thumb">
+                  {theme === "dark" ? (
+                    <Moon size={11} className="thumb-icon" />
+                  ) : (
+                    <Sun size={11} className="thumb-icon" />
+                  )}
+                </div>
+              </div>
+              <span className="theme-switch-label">
+                {theme === "dark" ? "Dark" : "Light"}
+              </span>
+            </button>
+          </div>
+
+          {/* Chat Messages / Greeting Screen */}
+          <ChatArea
+            thread={activeThread}
+            user={user}
+            greetingData={greetingData}
+            onSendMessage={handleSendMessage}
+            onRegenerate={handleRegenerate}
+            onInspectSources={handleInspectSources}
+            isGenerating={isGenerating}
+            streamingMessage={streamingMessage}
+            modelInfo={modelInfo}
+          />
+
+          {/* Floating Pill Input Bar at Bottom */}
+          <ChatInput
+            onSendMessage={handleSendMessage}
+            isGenerating={isGenerating}
+            onAbortGeneration={handleAbortGeneration}
+            placeholder="What's in your mind?..."
+          />
+        </main>
+
+        {/* Settings Modal (Temperature, Top_k, Top_p, BYOK, etc.) */}
+        <SettingsModal
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+          settings={settings}
+          modelInfo={modelInfo}
+          onSaveSettings={(newSettings) => {
+            setSettings(newSettings);
+            showToast("Model parameters updated successfully", "success");
+          }}
+        />
+
+        {/* Detailed Sources & Context Modal */}
+        <SourcesModal
+          isOpen={!!inspectSourcesData}
+          onClose={() => setInspectSourcesData(null)}
+          sources={inspectSourcesData?.sources || []}
+          metadata={inspectSourcesData?.metadata}
           modelInfo={modelInfo}
         />
 
-        {/* Floating Pill Input Bar at Bottom */}
-        <ChatInput
-          onSendMessage={handleSendMessage}
-          isGenerating={isGenerating}
-          onAbortGeneration={handleAbortGeneration}
-          placeholder="What's in your mind?..."
+        {/* Logout Confirmation Modal */}
+        <LogoutModal
+          isOpen={isLogoutOpen}
+          onClose={() => setIsLogoutOpen(false)}
+          onConfirm={handleConfirmLogout}
+          user={user}
         />
-      </main>
 
-      {/* Settings Modal (Temperature, Top_k, Top_p, etc.) */}
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        settings={settings}
-        modelInfo={modelInfo}
-        onSaveSettings={(newSettings) => {
-          setSettings(newSettings);
-          showToast("Model parameters updated successfully", "success");
-        }}
+        {/* Delete Thread Confirmation Modal */}
+        <DeleteThreadModal
+          isOpen={!!threadToDelete}
+          onClose={() => setThreadToDelete(null)}
+          onConfirm={handleConfirmDeleteThread}
+          threadTitle={threadToDelete?.title || "this conversation"}
+          isDeleting={isDeletingThread}
+        />
+
+        {/* Clear All Threads Confirmation Modal */}
+        <DeleteThreadModal
+          isOpen={isClearAllOpen}
+          onClose={() => setIsClearAllOpen(false)}
+          onConfirm={handleConfirmClearAllThreads}
+          isClearAll={true}
+          threadCount={threads.length}
+          isDeleting={isClearingAll}
+        />
+
+        {/* Toast Alerts */}
+        <Toast toast={toast} onClose={() => setToast(null)} />
+      </div>
+    );
+  };
+
+  return (
+    <Routes>
+      <Route
+        path="/login"
+        element={
+          localStorage.getItem("access_token") ? (
+            <Navigate to="/chat" replace />
+          ) : (
+            <div className="app-root-unauthed">
+              {renderThemeToggle("auth-theme-toggle-btn")}
+              <AuthPage onAuthSuccess={handleAuthSuccess} />
+              <Toast toast={toast} onClose={() => setToast(null)} />
+            </div>
+          )
+        }
       />
-
-      {/* Detailed Sources & Context Modal */}
-      <SourcesModal
-        isOpen={!!inspectSourcesData}
-        onClose={() => setInspectSourcesData(null)}
-        sources={inspectSourcesData?.sources || []}
-        metadata={inspectSourcesData?.metadata}
-        modelInfo={modelInfo}
+      <Route
+        path="/forbidden"
+        element={
+          <div className="app-root-unauthed">
+            {renderThemeToggle("forbidden-theme-toggle-btn")}
+            <ForbiddenPage onGoToLogin={() => navigate("/login")} />
+            <Toast toast={toast} onClose={() => setToast(null)} />
+          </div>
+        }
       />
-
-      {/* Logout Confirmation Modal */}
-      <LogoutModal
-        isOpen={isLogoutOpen}
-        onClose={() => setIsLogoutOpen(false)}
-        onConfirm={handleConfirmLogout}
-        user={user}
+      <Route path="/chat" element={renderChatLayout()} />
+      <Route path="/chat/:threadId" element={renderChatLayout()} />
+      <Route
+        path="/"
+        element={
+          localStorage.getItem("access_token") ? (
+            <Navigate to="/chat" replace />
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        }
       />
-
-      {/* Delete Thread Confirmation Modal */}
-      <DeleteThreadModal
-        isOpen={!!threadToDelete}
-        onClose={() => setThreadToDelete(null)}
-        onConfirm={handleConfirmDeleteThread}
-        threadTitle={threadToDelete?.title || "this conversation"}
-        isDeleting={isDeletingThread}
-      />
-
-      {/* Clear All Threads Confirmation Modal */}
-      <DeleteThreadModal
-        isOpen={isClearAllOpen}
-        onClose={() => setIsClearAllOpen(false)}
-        onConfirm={handleConfirmClearAllThreads}
-        isClearAll={true}
-        threadCount={threads.length}
-        isDeleting={isClearingAll}
-      />
-
-      {/* Toast Alerts */}
-      <Toast toast={toast} onClose={() => setToast(null)} />
-    </div>
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }

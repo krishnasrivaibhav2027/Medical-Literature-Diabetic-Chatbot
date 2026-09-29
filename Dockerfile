@@ -6,6 +6,7 @@ FROM python:3.11-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app \
+    HF_HOME=/app/model_cache \
     PORT=8080
 
 WORKDIR /app
@@ -24,7 +25,8 @@ RUN pip install --no-cache-dir --upgrade pip && \
 
 # Pre-download SentenceTransformer model weights into the container image
 # This eliminates a 600MB model download during Cloud Run cold boots!
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('google/embeddinggemma-300m')"
+RUN mkdir -p /app/model_cache && \
+    python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('google/embeddinggemma-300m')"
 
 # Copy application source code
 COPY backend /app/backend
