@@ -70,7 +70,10 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
 
     # 2. Cold-start model weight pre-warming hook
-    await prewarm_models()
+    try:
+        await prewarm_models()
+    except Exception as e:
+        logger.error("Cold-start model pre-warming encountered an error: %s. The server will continue and retry lazily on request.", e)
 
     # 3. LangGraph checkpointer & workflow compilation
     logger.info("Initializing chat workflow checkpointer...")
