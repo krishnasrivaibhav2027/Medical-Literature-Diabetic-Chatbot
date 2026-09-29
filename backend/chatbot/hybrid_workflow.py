@@ -62,8 +62,10 @@ def get_embedding_model() -> SentenceTransformer:
     """Lazy-load and return the cached SentenceTransformer singleton."""
     global _embedding_model
     if _embedding_model is None:
+        import os
         logger.info("Initializing SentenceTransformer('google/embeddinggemma-300m')...")
-        _embedding_model = SentenceTransformer("google/embeddinggemma-300m")
+        hf_token = getattr(settings, "HUGGING_FACE_TOKEN", None) or os.getenv("HF_TOKEN") or os.getenv("HUGGING_FACE_TOKEN")
+        _embedding_model = SentenceTransformer("google/embeddinggemma-300m", token=hf_token)
     return _embedding_model
 
 def __getattr__(name: str):

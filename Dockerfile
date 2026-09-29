@@ -23,10 +23,8 @@ COPY backend/requirements.txt /app/backend/requirements.txt
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r /app/backend/requirements.txt
 
-# Pre-download SentenceTransformer model weights into the container image
-# This eliminates a 600MB model download during Cloud Run cold boots!
-RUN mkdir -p /app/model_cache && \
-    python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('google/embeddinggemma-300m')"
+# Create model cache directory with appropriate structure
+RUN mkdir -p /app/model_cache
 
 # Copy application source code
 COPY backend /app/backend

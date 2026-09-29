@@ -42,6 +42,9 @@ async def prewarm_models():
     logger.info("Starting model weight pre-warming hook...")
 
     # 1. Warm up SentenceTransformer ('google/embeddinggemma-300m')
+    hf_token = getattr(settings, "HUGGING_FACE_TOKEN", None) or os.getenv("HF_TOKEN")
+    if hf_token:
+        os.environ["HF_TOKEN"] = hf_token
     model = get_embedding_model()
     # Execute dummy inference in a separate thread so the async event loop is never blocked
     await asyncio.to_thread(model.encode, "dummy warmup query token", show_progress_bar=False)

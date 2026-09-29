@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     JINA_API_KEY: str
     JINA_RERANKER_MODEL: str
     JINA_URL: str
+    HUGGING_FACE_TOKEN: Optional[str] = None
+    HF_TOKEN: Optional[str] = None
     LANGCHAIN_TRACING_V2: bool = False
     LANGCHAIN_API_KEY: Optional[str] = None
     LANGCHAIN_PROJECT: str = "hybrid-rag-production"
