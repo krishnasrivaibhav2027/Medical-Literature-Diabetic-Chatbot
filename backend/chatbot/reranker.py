@@ -1,11 +1,16 @@
 import logging
 import httpx
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from backend.core.config import settings
 
 logger = logging.getLogger("app.reranker")
 
-async def reranker(query: str, documents: List[Dict[str, Any]], top_n: int = 10) -> List[Dict[str, Any]]:
+async def reranker(
+    query: str,
+    documents: List[Dict[str, Any]],
+    top_n: int = 10,
+    api_key: Optional[str] = None,
+) -> List[Dict[str, Any]]:
     """
     Rerank documents using Jina Serverless Reranker API based on query relevance.
     Falls back gracefully to RRF candidate order if the external API call fails.
@@ -14,13 +19,14 @@ async def reranker(query: str, documents: List[Dict[str, Any]], top_n: int = 10)
         return []
 
     target_top_n = min(top_n, len(documents))
+    active_key = api_key or getattr(settings, "JINA_API_KEY", None)
 
-    if not getattr(settings, "JINA_API_KEY", None):
+    if not active_key:
         logger.warning("JINA_API_KEY not configured; returning un-reranked top candidates.")
         return documents[:target_top_n]
 
     headers = {
-        "Authorization": f"Bearer {settings.JINA_API_KEY}",
+        "Authorization": f"Bearer {active_key}",
         "Content-Type": "application/json",
     }
     payload = {

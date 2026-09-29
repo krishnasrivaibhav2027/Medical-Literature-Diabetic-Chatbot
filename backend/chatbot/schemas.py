@@ -14,6 +14,10 @@ class ChatRequest(BaseModel):
     max_tokens: Optional[int] = Field(None, ge=64, le=8192, description="Maximum tokens to generate")
     reranker_top_n: Optional[int] = Field(None, ge=1, le=50, description="Number of top documents after Cross-Encoder reranking")
     stream_mode: Optional[Literal["burst", "instant", "smooth"]] = Field("burst", description="Streaming playback mode for cached responses: 'burst' (high-speed SSE burst), 'instant' (single payload), or 'smooth' (standard simulated pace)")
+    custom_api_key: Optional[str] = Field(None, description="Optional custom BYOK LLM API key")
+    custom_base_url: Optional[str] = Field(None, description="Optional custom BYOK LLM API Base URL")
+    custom_model: Optional[str] = Field(None, description="Optional custom BYOK model identifier")
+    custom_jina_api_key: Optional[str] = Field(None, description="Optional custom BYOK Jina Reranker API key")
 
 class RegenerateRequest(BaseModel):
     thread_id: str = Field(..., description="Unique chat thread identifier to regenerate response for")
@@ -24,6 +28,10 @@ class RegenerateRequest(BaseModel):
     max_tokens: Optional[int] = Field(None, ge=64, le=8192, description="Maximum tokens to generate")
     reranker_top_n: Optional[int] = Field(None, ge=1, le=50, description="Number of top documents after Cross-Encoder reranking")
     stream_mode: Optional[Literal["burst", "instant", "smooth"]] = Field("burst", description="Streaming playback mode for cached responses: 'burst' (high-speed SSE burst), 'instant' (single payload), or 'smooth' (standard simulated pace)")
+    custom_api_key: Optional[str] = Field(None, description="Optional custom BYOK LLM API key")
+    custom_base_url: Optional[str] = Field(None, description="Optional custom BYOK LLM API Base URL")
+    custom_model: Optional[str] = Field(None, description="Optional custom BYOK model identifier")
+    custom_jina_api_key: Optional[str] = Field(None, description="Optional custom BYOK Jina Reranker API key")
 
 class StreamTokenData(BaseModel):
     token: str = Field(..., description = "Streaming Token from the LLM")

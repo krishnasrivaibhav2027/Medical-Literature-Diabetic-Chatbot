@@ -1,15 +1,59 @@
 import React, { useState } from "react";
-import { X, Sliders, RotateCcw, Check, Sparkles, Cpu, Layers, Zap } from "lucide-react";
+import {
+  X,
+  Sliders,
+  RotateCcw,
+  Check,
+  Sparkles,
+  Cpu,
+  Layers,
+  Zap,
+  Key,
+  Globe,
+  Eye,
+  EyeOff,
+  ShieldCheck,
+  Server,
+} from "lucide-react";
 import { DEFAULT_SETTINGS } from "../constants/initialData";
 
 export default function SettingsModal({ isOpen, onClose, settings, modelInfo, onSaveSettings }) {
   if (!isOpen) return null;
 
-  const [formData, setFormData] = useState({ ...settings });
+  const [activeTab, setActiveTab] = useState("byok"); // "byok" | "parameters"
+  const [formData, setFormData] = useState({
+    ...DEFAULT_SETTINGS,
+    ...settings,
+  });
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [showJinaKey, setShowJinaKey] = useState(false);
   const [savedToast, setSavedToast] = useState(false);
 
   const handleChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleProviderSelect = (providerId) => {
+    let defaultBaseUrl = formData.base_url;
+    let defaultModel = formData.model;
+
+    if (providerId === "xkiro") {
+      defaultBaseUrl = "https://api.xkiro.com/v1";
+      defaultModel = "cohere/command-a-reasoning";
+    } else if (providerId === "openai") {
+      defaultBaseUrl = "https://api.openai.com/v1";
+      defaultModel = "gpt-4o";
+    } else if (providerId === "groq") {
+      defaultBaseUrl = "https://api.groq.com/openai/v1";
+      defaultModel = "llama-3.3-70b-versatile";
+    }
+
+    setFormData((prev) => ({
+      ...prev,
+      provider: providerId,
+      base_url: defaultBaseUrl,
+      model: defaultModel,
+    }));
   };
 
   const handleReset = () => {
@@ -27,7 +71,7 @@ export default function SettingsModal({ isOpen, onClose, settings, modelInfo, on
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-card" style={{ maxWidth: "580px" }} onClick={(e) => e.stopPropagation()}>
         {/* Modal Header */}
         <div className="modal-header">
           <div className="modal-title-wrap">
@@ -35,8 +79,8 @@ export default function SettingsModal({ isOpen, onClose, settings, modelInfo, on
               <Sliders size={20} className="text-primary" />
             </div>
             <div>
-              <h2 className="modal-title">Model Settings & Parameters</h2>
-              <p className="modal-subtitle">Configure generation parameters and Hybrid RAG retrieval pipeline</p>
+              <h2 className="modal-title">Model Settings & API Keys</h2>
+              <p className="modal-subtitle">Configure BYOK credentials and Hybrid RAG retrieval pipeline</p>
             </div>
           </div>
           <button className="btn-icon-ghost" onClick={onClose} aria-label="Close modal">
@@ -44,21 +88,210 @@ export default function SettingsModal({ isOpen, onClose, settings, modelInfo, on
           </button>
         </div>
 
+        {/* Tab Switcher */}
+        <div style={{ display: "flex", gap: "6px", padding: "10px 24px 0", borderBottom: "1px solid var(--border-light)" }}>
+          <button
+            type="button"
+            onClick={() => setActiveTab("byok")}
+            style={{
+              padding: "8px 14px",
+              background: "transparent",
+              border: "none",
+              borderBottom: activeTab === "byok" ? "2px solid var(--primary)" : "2px solid transparent",
+              color: activeTab === "byok" ? "var(--primary)" : "var(--text-secondary)",
+              fontWeight: activeTab === "byok" ? 700 : 500,
+              fontSize: "0.85rem",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+            }}
+          >
+            <Key size={15} />
+            <span>API Credentials (BYOK)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("parameters")}
+            style={{
+              padding: "8px 14px",
+              background: "transparent",
+              border: "none",
+              borderBottom: activeTab === "parameters" ? "2px solid var(--primary)" : "2px solid transparent",
+              color: activeTab === "parameters" ? "var(--primary)" : "var(--text-secondary)",
+              fontWeight: activeTab === "parameters" ? 700 : 500,
+              fontSize: "0.85rem",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+            }}
+          >
+            <Sliders size={15} />
+            <span>Parameters & Cache</span>
+          </button>
+        </div>
+
         {/* Modal Body */}
-        <div className="modal-body">
-          {/* Active Model Indicator */}
-          <div className="setting-card">
-            <div className="setting-card-header">
-              <div className="setting-label-wrap">
-                <Cpu size={16} className="text-indigo-600" />
-                <span className="setting-name">Underlying Model</span>
+        <div className="modal-body" style={{ maxHeight: "65vh", overflowY: "auto", padding: "20px 24px" }}>
+          {activeTab === "byok" ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              {/* BYOK Info Banner */}
+              <div style={{
+                display: "flex",
+                gap: "10px",
+                padding: "12px 14px",
+                borderRadius: "12px",
+                background: "rgba(99, 102, 241, 0.08)",
+                border: "1px solid rgba(99, 102, 241, 0.2)",
+                fontSize: "0.8rem",
+                color: "var(--text-secondary)",
+                lineHeight: "1.45"
+              }}>
+                <ShieldCheck size={20} className="text-primary" style={{ flexShrink: 0, marginTop: "2px" }} />
+                <span>
+                  <strong>Bring Your Own Key (BYOK):</strong> Your API keys are encrypted locally in your browser and passed per request via secure headers. If fields are left blank, the assistant uses the system default server keys.
+                </span>
               </div>
-              <span className="badge badge-indigo">{modelInfo?.provider || "Xkiro Cloud API"}</span>
+
+              {/* Provider Selection */}
+              <div className="byok-field-group">
+                <label className="byok-label">AI Model Provider</label>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "8px" }}>
+                  {[
+                    { id: "xkiro", label: "XKiro (Default)" },
+                    { id: "openai", label: "OpenAI (GPT-4o)" },
+                    { id: "groq", label: "Groq Cloud" },
+                    { id: "custom", label: "Custom Compatible" },
+                  ].map((p) => {
+                    const isSelected = (formData.provider || "xkiro") === p.id;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => handleProviderSelect(p.id)}
+                        style={{
+                          padding: "8px 12px",
+                          borderRadius: "8px",
+                          fontSize: "0.82rem",
+                          fontWeight: isSelected ? 700 : 500,
+                          background: isSelected ? "var(--primary-light)" : "var(--bg-card)",
+                          color: isSelected ? "var(--primary)" : "var(--text-secondary)",
+                          border: isSelected ? "1.5px solid var(--primary)" : "1px solid var(--border-light)",
+                          cursor: "pointer",
+                          textAlign: "center",
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        {p.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Base URL */}
+              <div className="byok-field-group">
+                <label className="byok-label" htmlFor="byok-base-url">
+                  API Base URL
+                </label>
+                <div style={{ position: "relative" }}>
+                  <input
+                    id="byok-base-url"
+                    type="text"
+                    value={formData.base_url || ""}
+                    onChange={(e) => handleChange("base_url", e.target.value)}
+                    placeholder="https://api.openai.com/v1"
+                    className="byok-input"
+                  />
+                </div>
+                <span className="byok-info-note">Supports any OpenAI-compatible `/v1/chat/completions` endpoint.</span>
+              </div>
+
+              {/* Model Name */}
+              <div className="byok-field-group">
+                <label className="byok-label" htmlFor="byok-model-name">
+                  Model Identifier
+                </label>
+                <input
+                  id="byok-model-name"
+                  type="text"
+                  value={formData.model || ""}
+                  onChange={(e) => handleChange("model", e.target.value)}
+                  placeholder="e.g. gpt-4o, cohere/command-a-reasoning, llama-3.3-70b-versatile"
+                  className="byok-input"
+                />
+              </div>
+
+              {/* LLM API Key */}
+              <div className="byok-field-group">
+                <label className="byok-label" htmlFor="byok-api-key">
+                  LLM API Key
+                </label>
+                <div className="byok-input-password-wrap">
+                  <input
+                    id="byok-api-key"
+                    type={showApiKey ? "text" : "password"}
+                    value={formData.api_key || ""}
+                    onChange={(e) => handleChange("api_key", e.target.value)}
+                    placeholder="Paste your API key (sk-...)"
+                    className="byok-input"
+                    autoComplete="off"
+                  />
+                  <button
+                    type="button"
+                    className="byok-eye-btn"
+                    onClick={() => setShowApiKey((v) => !v)}
+                    title={showApiKey ? "Hide key" : "Show key"}
+                  >
+                    {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+                <span className="byok-info-note">Leave empty to use the system default server key.</span>
+              </div>
+
+              {/* Jina Reranker API Key */}
+              <div className="byok-field-group">
+                <label className="byok-label" htmlFor="byok-jina-key">
+                  Jina AI Reranker API Key (Optional)
+                </label>
+                <div className="byok-input-password-wrap">
+                  <input
+                    id="byok-jina-key"
+                    type={showJinaKey ? "text" : "password"}
+                    value={formData.jina_api_key || ""}
+                    onChange={(e) => handleChange("jina_api_key", e.target.value)}
+                    placeholder="jina_..."
+                    className="byok-input"
+                    autoComplete="off"
+                  />
+                  <button
+                    type="button"
+                    className="byok-eye-btn"
+                    onClick={() => setShowJinaKey((v) => !v)}
+                    title={showJinaKey ? "Hide key" : "Show key"}
+                  >
+                    {showJinaKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+                <span className="byok-info-note">If blank, utilizes the server's Jina Reranker v3.5 with RRF fallback.</span>
+              </div>
             </div>
-            <p className="setting-desc">
-              Currently powered by <code className="code-inline">{modelInfo?.model || formData.model || "cohere/command-a-reasoning"}</code> with <code className="code-inline">{modelInfo?.embedding_model || "google/embeddinggemma-300m"}</code> dense embeddings.
-            </p>
-          </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              {/* Active Model Indicator */}
+              <div className="setting-card">
+                <div className="setting-card-header">
+                  <div className="setting-label-wrap">
+                    <Cpu size={16} className="text-indigo-600" />
+                    <span className="setting-name">Underlying Model</span>
+                  </div>
+                  <span className="badge badge-indigo">{formData.provider || modelInfo?.provider || "Xkiro Cloud API"}</span>
+                </div>
+                <p className="setting-desc">
+                  Configured model: <code className="code-inline">{formData.model || "cohere/command-a-reasoning"}</code> with <code className="code-inline">{modelInfo?.embedding_model || "google/embeddinggemma-300m"}</code> dense embeddings.
+                </p>
+              </div>
 
           {/* Temperature Slider */}
           <div className="setting-card">
@@ -229,7 +462,8 @@ export default function SettingsModal({ isOpen, onClose, settings, modelInfo, on
               })}
             </div>
           </div>
-
+        </div>
+      )}
         </div>
 
         {/* Modal Footer */}

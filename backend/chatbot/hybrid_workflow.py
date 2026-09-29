@@ -88,6 +88,26 @@ class ChatState(TypedDict):
     max_tokens: Optional[int]
     reranker_top_n: Optional[int]
     summary: Optional[str]
+    custom_api_key: Optional[str]
+    custom_base_url: Optional[str]
+    custom_model: Optional[str]
+    custom_jina_api_key: Optional[str]
+
+def resolve_llm_model(state: ChatState):
+    """
+    Returns custom BYOK model if user configured API keys, otherwise system default model with fallbacks.
+    """
+    custom_api_key = state.get("custom_api_key")
+    if custom_api_key and isinstance(custom_api_key, str) and custom_api_key.strip():
+        custom_base_url = state.get("custom_base_url") or "https://api.openai.com/v1"
+        custom_model = state.get("custom_model") or "gpt-4o-mini"
+        return TiktokenChatOpenAI(
+            model=custom_model,
+            base_url=custom_base_url,
+            api_key=custom_api_key.strip(),
+            temperature=0.2,
+        )
+    return model
 
 def format_chat_history(messages: Sequence[BaseMessage], max_turns: int = 6) -> str:
     """Format recent conversation turns into a clean readable string for prompt context."""
@@ -124,7 +144,8 @@ async def router_node(state: ChatState):
     chat_history = format_chat_history(messages[:-1], max_turns=6)
 
     try:
-        router_chain = ROUTER_PROMPT | model.with_structured_output(QueryIntent)
+        active_model = resolve_llm_model(state)
+        router_chain = ROUTER_PROMPT | active_model.with_structured_output(QueryIntent)
         intent_obj = await router_chain.ainvoke({"query": query, "chat_history": chat_history})
         classified_intent = intent_obj.intent
     except Exception as e:
@@ -176,7 +197,8 @@ async def summarizer_node(state: ChatState):
     if not conversation_history:
         conversation_history = "Initial dialogue interval."
     
-    chain = SUMMARY_PROMPT | model | StrOutputParser()
+    active_model = resolve_llm_model(state)
+    chain = SUMMARY_PROMPT | active_model | StrOutputParser()
     try:
         new_summary = await chain.ainvoke({
             "previous_summary": previous_summary,
@@ -207,7 +229,8 @@ async def query_rewriter_node(state: ChatState):
         return {"search_query": query}
 
     try:
-        rewrite_chain = REWRITE_PROMPT | model | StrOutputParser()
+        active_model = resolve_llm_model(state)
+        rewrite_chain = REWRITE_PROMPT | active_model | StrOutputParser()
         rewritten = await rewrite_chain.ainvoke({
             "query": query,
             "chat_history": chat_history,
@@ -303,8 +326,13 @@ async def retrieval_node(state: ChatState):
     candidate_k = min(50, max(top_n * 2, 20))
     fused_docs = await rrf_score([vector_docs, bm25_docs], k=60, top_k=candidate_k)
 
-    # 4. Jina Serverless Reranker API
-    reranked_docs = await reranker(query, fused_docs, top_n=top_n)
+    # 4. Jina Serverless Reranker API (supports optional BYOK Jina key)
+    reranked_docs = await reranker(
+        query,
+        fused_docs,
+        top_n=top_n,
+        api_key=state.get("custom_jina_api_key"),
+    )
 
     retrieved_docs = "\n\n".join([doc["text"] for doc in reranked_docs])
     retrieved_metadata = [doc["metadata"] for doc in reranked_docs]
@@ -367,7 +395,8 @@ async def diabetes_node(state: ChatState):
     if state.get("top_k") is not None:
         bind_kwargs["extra_body"] = {"top_k": int(state["top_k"])}
 
-    active_model = model.bind(**bind_kwargs) if bind_kwargs else model
+    base_model = resolve_llm_model(state)
+    active_model = base_model.bind(**bind_kwargs) if bind_kwargs else base_model
     chain = CONVERSATION_PROMPT | active_model | StrOutputParser()
 
     last_err = None

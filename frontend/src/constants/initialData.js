@@ -6,6 +6,10 @@ export const DEFAULT_SETTINGS = {
   reranker_top_n: 10,
   model: "cohere/command-a-reasoning",
   stream_mode: "burst",
+  provider: "xkiro",
+  api_key: "",
+  base_url: "https://api.xkiro.com/v1",
+  jina_api_key: "",
 };
 
 export const SAMPLE_SOURCES_DIABETES = [];

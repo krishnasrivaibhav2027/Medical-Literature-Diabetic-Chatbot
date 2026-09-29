@@ -21,9 +21,7 @@ export async function checkBackendHealth() {
  * Register a new user
  */
 export async function registerUser({ username, email, password, confirm_password }) {
-  const isHealthy = await checkBackendHealth();
-
-  if (isHealthy) {
+  try {
     const res = await fetch(`${API_BASE_URL}/user/create-user`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -40,27 +38,19 @@ export async function registerUser({ username, email, password, confirm_password
       throw new Error(data.detail || data.error || "Signup failed");
     }
     return data;
+  } catch (err) {
+    if (err.message && !err.message.includes("Failed to fetch")) {
+      throw err;
+    }
+    throw new Error("Cannot connect to backend service. Please ensure the backend is running.");
   }
-
-  // Simulation fallback if backend is offline
-  const nowIso = new Date().toISOString();
-  return {
-    id: Math.floor(Math.random() * 1000) + 1,
-    username,
-    email,
-    created_at: nowIso,
-    login_at: nowIso,
-    logout_at: null,
-  };
 }
 
 /**
  * Login user with email & password
  */
 export async function loginUser({ email, password }) {
-  const isHealthy = await checkBackendHealth();
-
-  if (isHealthy) {
+  try {
     const res = await fetch(`${API_BASE_URL}/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -72,35 +62,36 @@ export async function loginUser({ email, password }) {
       throw new Error(data.detail || data.error || "Invalid email or password");
     }
     return data; // { access_token, token_type }
+  } catch (err) {
+    if (err.message && !err.message.includes("Failed to fetch")) {
+      throw err;
+    }
+    throw new Error("Cannot connect to backend service. Please ensure the backend is running.");
   }
-
-  // Simulation fallback
-  return {
-    access_token: `mock_jwt_token_${Date.now()}`,
-    token_type: "bearer",
-  };
 }
 
 /**
  * Fetch authenticated user profile (/user/me)
  */
 export async function getMe(token) {
-  const isHealthy = await checkBackendHealth();
+  if (!token) return null;
 
-  if (isHealthy && token) {
-    try {
-      const res = await fetch(`${API_BASE_URL}/user/me`, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (res.ok) {
-        return await res.json();
-      }
-    } catch (e) {
-      console.warn("Failed fetching /user/me:", e);
+  try {
+    const res = await fetch(`${API_BASE_URL}/user/me`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (res.ok) {
+      return await res.json();
     }
+    if (res.status === 401 || res.status === 403) {
+      localStorage.removeItem("access_token");
+      localStorage.removeItem("rag_chat_user");
+    }
+  } catch (e) {
+    console.warn("Failed fetching /user/me:", e);
   }
 
   return null;
@@ -274,106 +265,114 @@ export async function streamChatMessage({
   onToken,
   onMetadata,
 }) {
-  const isHealthy = await checkBackendHealth();
   const token = localStorage.getItem("access_token");
 
-  if (isHealthy) {
-    try {
-      const response = await fetch(`${API_BASE_URL}/chatbot/chat`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          query,
-          thread_id: threadId,
-          temperature: settings?.temperature,
-          top_k: settings?.top_k,
-          top_p: settings?.top_p,
-          max_tokens: settings?.max_tokens,
-          reranker_top_n: settings?.reranker_top_n,
-          stream_mode: settings?.stream_mode || "burst",
-        }),
-        signal,
-      });
+  try {
+    const response = await fetch(`${API_BASE_URL}/chatbot/chat`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(settings?.api_key ? { "x-llm-api-key": settings.api_key } : {}),
+        ...(settings?.base_url ? { "x-llm-base-url": settings.base_url } : {}),
+        ...(settings?.model ? { "x-llm-model": settings.model } : {}),
+        ...(settings?.jina_api_key ? { "x-jina-api-key": settings.jina_api_key } : {}),
+        ...(settings?.stream_mode ? { "x-stream-mode": settings.stream_mode } : {}),
+      },
+      body: JSON.stringify({
+        query,
+        thread_id: threadId,
+        temperature: settings?.temperature,
+        top_k: settings?.top_k,
+        top_p: settings?.top_p,
+        max_tokens: settings?.max_tokens,
+        reranker_top_n: settings?.reranker_top_n,
+        stream_mode: settings?.stream_mode || "burst",
+        custom_api_key: settings?.api_key || null,
+        custom_base_url: settings?.base_url || null,
+        custom_model: settings?.model || null,
+        custom_jina_api_key: settings?.jina_api_key || null,
+      }),
+      signal,
+    });
 
-      if (!response.ok) {
-        throw new Error(`Server returned HTTP ${response.status}`);
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder("utf-8");
-      let buffer = "";
-
-      while (true) {
-        if (signal?.aborted) {
-          reader.cancel();
-          throw new DOMException("Aborted", "AbortError");
-        }
-
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed) continue;
-
-          let eventType = "message";
-          let eventData = "";
-
-          const subLines = trimmed.split("\n");
-          for (const sub of subLines) {
-            if (sub.startsWith("event:")) {
-              eventType = sub.replace("event:", "").trim();
-            } else if (sub.startsWith("data:")) {
-              eventData = sub.replace("data:", "").trim();
-            }
-          }
-
-          if (eventType === "token") {
-            try {
-              const parsed = JSON.parse(eventData);
-              if (parsed.token) onToken(parsed.token);
-            } catch {
-              if (eventData) onToken(eventData);
-            }
-          } else if (eventType === "metadata") {
-            try {
-              const parsedMeta = JSON.parse(eventData);
-              const realSources = Array.isArray(parsedMeta.sources) ? parsedMeta.sources : [];
-              onMetadata({
-                ...parsedMeta,
-                sources: realSources,
-              });
-            } catch (err) {
-              console.warn("Could not parse metadata", err);
-            }
-          }
-        }
-      }
-      return;
-    } catch (err) {
-      if (err.name === "AbortError" || signal?.aborted) {
-        throw err;
-      }
-      console.warn("Backend streaming failed, falling back to simulated Hybrid RAG engine:", err);
+    if (response.status === 401 || response.status === 403) {
+      localStorage.removeItem("access_token");
+      localStorage.removeItem("rag_chat_user");
+      const err = new Error("FORBIDDEN: Session expired or access denied.");
+      err.status = response.status;
+      throw err;
     }
-  }
 
-  // Fallback: Real-time simulation of Hybrid RAG streaming
-  await simulateHybridRagStream({
-    query,
-    threadId,
-    settings,
-    signal,
-    onToken,
-    onMetadata,
-  });
+    if (!response.ok) {
+      let errDetail = `HTTP ${response.status}`;
+      try {
+        const errJson = await response.json();
+        errDetail = errJson.detail || errJson.message || errDetail;
+      } catch {}
+      throw new Error(`Server Error: ${errDetail}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
+
+    while (true) {
+      if (signal?.aborted) {
+        reader.cancel();
+        throw new DOMException("Aborted", "AbortError");
+      }
+
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+
+        let eventType = "message";
+        let eventData = "";
+
+        const subLines = trimmed.split("\n");
+        for (const sub of subLines) {
+          if (sub.startsWith("event:")) {
+            eventType = sub.replace("event:", "").trim();
+          } else if (sub.startsWith("data:")) {
+            eventData = sub.replace("data:", "").trim();
+          }
+        }
+
+        if (eventType === "token") {
+          try {
+            const parsed = JSON.parse(eventData);
+            if (parsed.token) onToken(parsed.token);
+          } catch {
+            if (eventData) onToken(eventData);
+          }
+        } else if (eventType === "metadata") {
+          try {
+            const parsedMeta = JSON.parse(eventData);
+            const realSources = Array.isArray(parsedMeta.sources) ? parsedMeta.sources : [];
+            onMetadata({
+              ...parsedMeta,
+              sources: realSources,
+            });
+          } catch (err) {
+            console.warn("Could not parse metadata", err);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    if (err.name === "AbortError" || signal?.aborted) {
+      throw err;
+    }
+    throw err;
+  }
 }
 
 /**
@@ -388,106 +387,114 @@ export async function streamRegenerateChatMessage({
   onToken,
   onMetadata,
 }) {
-  const isHealthy = await checkBackendHealth();
   const token = localStorage.getItem("access_token");
 
-  if (isHealthy) {
-    try {
-      const response = await fetch(`${API_BASE_URL}/chatbot/regenerate`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          query: query || null,
-          thread_id: threadId,
-          temperature: settings?.temperature,
-          top_k: settings?.top_k,
-          top_p: settings?.top_p,
-          max_tokens: settings?.max_tokens,
-          reranker_top_n: settings?.reranker_top_n,
-          stream_mode: settings?.stream_mode || "burst",
-        }),
-        signal,
-      });
+  try {
+    const response = await fetch(`${API_BASE_URL}/chatbot/regenerate`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(settings?.api_key ? { "x-llm-api-key": settings.api_key } : {}),
+        ...(settings?.base_url ? { "x-llm-base-url": settings.base_url } : {}),
+        ...(settings?.model ? { "x-llm-model": settings.model } : {}),
+        ...(settings?.jina_api_key ? { "x-jina-api-key": settings.jina_api_key } : {}),
+        ...(settings?.stream_mode ? { "x-stream-mode": settings.stream_mode } : {}),
+      },
+      body: JSON.stringify({
+        query: query || null,
+        thread_id: threadId,
+        temperature: settings?.temperature,
+        top_k: settings?.top_k,
+        top_p: settings?.top_p,
+        max_tokens: settings?.max_tokens,
+        reranker_top_n: settings?.reranker_top_n,
+        stream_mode: settings?.stream_mode || "burst",
+        custom_api_key: settings?.api_key || null,
+        custom_base_url: settings?.base_url || null,
+        custom_model: settings?.model || null,
+        custom_jina_api_key: settings?.jina_api_key || null,
+      }),
+      signal,
+    });
 
-      if (!response.ok) {
-        throw new Error(`Server returned HTTP ${response.status}`);
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder("utf-8");
-      let buffer = "";
-
-      while (true) {
-        if (signal?.aborted) {
-          reader.cancel();
-          throw new DOMException("Aborted", "AbortError");
-        }
-
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed) continue;
-
-          let eventType = "message";
-          let eventData = "";
-
-          const subLines = trimmed.split("\n");
-          for (const sub of subLines) {
-            if (sub.startsWith("event:")) {
-              eventType = sub.replace("event:", "").trim();
-            } else if (sub.startsWith("data:")) {
-              eventData = sub.replace("data:", "").trim();
-            }
-          }
-
-          if (eventType === "token") {
-            try {
-              const parsed = JSON.parse(eventData);
-              if (parsed.token) onToken(parsed.token);
-            } catch {
-              if (eventData) onToken(eventData);
-            }
-          } else if (eventType === "metadata") {
-            try {
-              const parsedMeta = JSON.parse(eventData);
-              const realSources = Array.isArray(parsedMeta.sources) ? parsedMeta.sources : [];
-              onMetadata({
-                ...parsedMeta,
-                sources: realSources,
-              });
-            } catch (err) {
-              console.warn("Could not parse metadata", err);
-            }
-          }
-        }
-      }
-      return;
-    } catch (err) {
-      if (err.name === "AbortError" || signal?.aborted) {
-        throw err;
-      }
-      console.warn("Backend regenerate streaming failed, falling back to simulated engine:", err);
+    if (response.status === 401 || response.status === 403) {
+      localStorage.removeItem("access_token");
+      localStorage.removeItem("rag_chat_user");
+      const err = new Error("FORBIDDEN: Session expired or access denied.");
+      err.status = response.status;
+      throw err;
     }
-  }
 
-  // Fallback simulation
-  await simulateHybridRagStream({
-    query,
-    threadId,
-    settings,
-    signal,
-    onToken,
-    onMetadata,
-  });
+    if (!response.ok) {
+      let errDetail = `HTTP ${response.status}`;
+      try {
+        const errJson = await response.json();
+        errDetail = errJson.detail || errJson.message || errDetail;
+      } catch {}
+      throw new Error(`Server Error: ${errDetail}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
+
+    while (true) {
+      if (signal?.aborted) {
+        reader.cancel();
+        throw new DOMException("Aborted", "AbortError");
+      }
+
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+
+        let eventType = "message";
+        let eventData = "";
+
+        const subLines = trimmed.split("\n");
+        for (const sub of subLines) {
+          if (sub.startsWith("event:")) {
+            eventType = sub.replace("event:", "").trim();
+          } else if (sub.startsWith("data:")) {
+            eventData = sub.replace("data:", "").trim();
+          }
+        }
+
+        if (eventType === "token") {
+          try {
+            const parsed = JSON.parse(eventData);
+            if (parsed.token) onToken(parsed.token);
+          } catch {
+            if (eventData) onToken(eventData);
+          }
+        } else if (eventType === "metadata") {
+          try {
+            const parsedMeta = JSON.parse(eventData);
+            const realSources = Array.isArray(parsedMeta.sources) ? parsedMeta.sources : [];
+            onMetadata({
+              ...parsedMeta,
+              sources: realSources,
+            });
+          } catch (err) {
+            console.warn("Could not parse metadata", err);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    if (err.name === "AbortError" || signal?.aborted) {
+      throw err;
+    }
+    throw err;
+  }
 }
 
 /**

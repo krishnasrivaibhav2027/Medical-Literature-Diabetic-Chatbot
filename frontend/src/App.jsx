@@ -8,6 +8,7 @@ import SourcesModal from "./components/SourcesModal";
 import LogoutModal from "./components/LogoutModal";
 import DeleteThreadModal from "./components/DeleteThreadModal";
 import AuthPage from "./components/AuthPage";
+import ForbiddenPage from "./components/ForbiddenPage";
 import Toast from "./components/Toast";
 import {
   DEFAULT_SETTINGS,
@@ -31,6 +32,12 @@ export default function App() {
   const [user, setUser] = useState(() => {
     const saved = localStorage.getItem("rag_chat_user");
     return saved ? JSON.parse(saved) : null;
+  });
+
+  // Strict route authorization view: 'authenticated' | 'forbidden' | 'login'
+  const [authView, setAuthView] = useState(() => {
+    const token = localStorage.getItem("access_token");
+    return token ? "authenticated" : "forbidden";
   });
 
   const [settings, setSettings] = useState(() => {
@@ -87,19 +94,36 @@ export default function App() {
     });
   }, []);
 
-  // Sync user profile from backend on mount (ensuring system time is up-to-date)
+  // Sync and strictly verify user profile from backend on mount
   useEffect(() => {
     const token = localStorage.getItem("access_token");
-    if (token) {
-      getMe(token).then((profile) => {
+    if (!token) {
+      setUser(null);
+      setAuthView("forbidden");
+      return;
+    }
+
+    getMe(token)
+      .then((profile) => {
         if (profile && profile.username) {
           setUser((prev) => ({
             ...prev,
             ...profile,
           }));
+          setAuthView("authenticated");
+        } else {
+          localStorage.removeItem("access_token");
+          localStorage.removeItem("rag_chat_user");
+          setUser(null);
+          setAuthView("forbidden");
         }
+      })
+      .catch(() => {
+        localStorage.removeItem("access_token");
+        localStorage.removeItem("rag_chat_user");
+        setUser(null);
+        setAuthView("forbidden");
       });
-    }
   }, []);
 
   const [threads, setThreads] = useState(() => {
@@ -231,6 +255,7 @@ export default function App() {
   const handleAuthSuccess = async (authedUser) => {
     setUser(authedUser);
     localStorage.setItem("rag_chat_user", JSON.stringify(authedUser));
+    setAuthView("authenticated");
 
     // Refresh greeting with newly signed-up username
     setGreetingData(generateDynamicGreeting(authedUser.username || "there"));
@@ -568,9 +593,15 @@ export default function App() {
           "Generation stopped. Session was terminated without saving to chat history.",
           "warning"
         );
+      } else if (err.message && err.message.includes("FORBIDDEN")) {
+        localStorage.removeItem("access_token");
+        localStorage.removeItem("rag_chat_user");
+        setUser(null);
+        setAuthView("forbidden");
+        showToast("Access forbidden: session expired or unauthorized.", "error");
       } else {
         console.error("Chat error:", err);
-        showToast("An error occurred during response generation.", "error");
+        showToast(err.message || "An error occurred during response generation.", "error");
       }
     } finally {
       setIsGenerating(false);
@@ -724,9 +755,15 @@ export default function App() {
     } catch (err) {
       if (err.name === "AbortError" || controller.signal.aborted) {
         showToast("Regeneration stopped.", "warning");
+      } else if (err.message && err.message.includes("FORBIDDEN")) {
+        localStorage.removeItem("access_token");
+        localStorage.removeItem("rag_chat_user");
+        setUser(null);
+        setAuthView("forbidden");
+        showToast("Access forbidden: session expired or unauthorized.", "error");
       } else {
         console.error("Regeneration error:", err);
-        showToast("An error occurred during response regeneration.", "error");
+        showToast(err.message || "An error occurred during response regeneration.", "error");
       }
     } finally {
       setIsGenerating(false);
@@ -753,11 +790,48 @@ export default function App() {
     setThreads([]);
     setActiveThreadId(null);
     setIsLogoutOpen(false);
+    setAuthView("login");
     showToast("Signed out successfully", "info");
   };
 
-  // If user is not authenticated, show the Signup/Login page!
-  if (!user) {
+  // If user is unauthenticated, render the 403 Forbidden Access Denied barrier
+  if (authView === "forbidden") {
+    return (
+      <div className="app-root-unauthed">
+        <div className="auth-top-actions">
+          <button
+            id="auth-theme-toggle-btn"
+            className="theme-toggle-switch"
+            onClick={toggleTheme}
+            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            aria-label="Toggle dark and light mode"
+          >
+            <div className={`theme-switch-track ${theme}`}>
+              <div className="theme-switch-icons">
+                <Sun size={12} className="switch-icon sun" />
+                <Moon size={12} className="switch-icon moon" />
+              </div>
+              <div className="theme-switch-thumb">
+                {theme === "dark" ? (
+                  <Moon size={11} className="thumb-icon" />
+                ) : (
+                  <Sun size={11} className="thumb-icon" />
+                )}
+              </div>
+            </div>
+            <span className="theme-switch-label">
+              {theme === "dark" ? "Dark" : "Light"}
+            </span>
+          </button>
+        </div>
+        <ForbiddenPage onGoToLogin={() => setAuthView("login")} />
+        <Toast toast={toast} onClose={() => setToast(null)} />
+      </div>
+    );
+  }
+
+  // If user navigated to login or has not yet authenticated
+  if (authView === "login" || !user) {
     return (
       <div className="app-root-unauthed">
         <div className="auth-top-actions">

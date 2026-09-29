@@ -366,6 +366,12 @@ class ChatbotService:
         except Exception as e:
             logger.warning("Could not reset LangGraph checkpointer messages [session=%s]: %s", session_id, e)
 
+        # Extract BYOK headers if provided by client
+        custom_api_key = request.headers.get("x-llm-api-key") if request else None
+        custom_base_url = request.headers.get("x-llm-base-url") if request else None
+        custom_model = request.headers.get("x-llm-model") if request else None
+        custom_jina_api_key = request.headers.get("x-jina-api-key") if request else None
+
         new_input = {
             "messages": thread_messages,
             "query": user_message,
@@ -374,6 +380,10 @@ class ChatbotService:
             "top_k": top_k,
             "max_tokens": max_tokens,
             "reranker_top_n": reranker_top_n,
+            "custom_api_key": custom_api_key,
+            "custom_base_url": custom_base_url,
+            "custom_model": custom_model,
+            "custom_jina_api_key": custom_jina_api_key,
         }
 
         # Nodes whose intermediate outputs we don't want to stream as tokens
@@ -457,7 +467,7 @@ class ChatbotService:
         await self._update_thread_metadata(session_id, detected_intent, user_query=user_message)
 
         # Emit closing metadata event
-        active_model_name = getattr(active_llm_model, "model_name", "cohere/command-a-reasoning")
+        active_model_name = custom_model or getattr(active_llm_model, "model_name", "cohere/command-a-reasoning")
 
         # Save to Redis QA cache (TTL: 24h) and Redis Streaming Token Buffer ONLY for valid Diabetes responses
         if final_text and detected_intent == "Diabetes":
@@ -850,13 +860,16 @@ class ChatbotService:
     async def get_history(self, session_id: str, user: User) -> List[MessageSchema]:
         try:
             thread_res = await self.db.execute(
-                select(ChatThread).where(
-                    ChatThread.thread_id == session_id, ChatThread.user_id == user.id
-                )
+                select(ChatThread).where(ChatThread.thread_id == session_id)
             )
             thread = thread_res.scalar_one_or_none()
             if not thread:
                 return []
+            if thread.user_id != user.id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Forbidden: You do not have permission to view this chat thread.",
+                )
             msg_res = await self.db.execute(
                 select(ChatMessage).where(
                     ChatMessage.thread_id == thread.id
@@ -905,11 +918,21 @@ class ChatbotService:
     
     async def delete_chat(self, session_id: str, user: User) -> None:
         try:
-            await self.db.execute(
-                delete(ChatThread).where(ChatThread.thread_id == session_id,
-                ChatThread.user_id == user.id)
+            thread_res = await self.db.execute(
+                select(ChatThread).where(ChatThread.thread_id == session_id)
             )
+            thread = thread_res.scalar_one_or_none()
+            if not thread:
+                return
+            if thread.user_id != user.id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Forbidden: You do not have permission to delete this chat thread.",
+                )
+            await self.db.delete(thread)
             await self.db.commit()
+        except HTTPException:
+            raise
         except Exception as e:
             logger.error("Failed to delete chat thread=%s: %s", session_id, e)
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
