@@ -1,11 +1,13 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Send, Square } from "lucide-react";
+import { Send, Square, Key } from "lucide-react";
 
 export default function ChatInput({
   onSendMessage,
   isGenerating,
   onAbortGeneration,
   placeholder = "What's in your mind?...",
+  isApiKeyMissing = false,
+  onOpenSettings,
 }) {
   const [inputText, setInputText] = useState("");
   const textareaRef = useRef(null);
@@ -21,6 +23,10 @@ export default function ChatInput({
 
   const handleSubmit = (e) => {
     if (e) e.preventDefault();
+    if (isApiKeyMissing) {
+      if (onOpenSettings) onOpenSettings();
+      return;
+    }
     if (isGenerating) return;
     if (!inputText.trim()) return;
 
@@ -38,6 +44,16 @@ export default function ChatInput({
     }
   };
 
+  const handleInputClick = () => {
+    if (isApiKeyMissing && onOpenSettings) {
+      onOpenSettings();
+    }
+  };
+
+  const resolvedPlaceholder = isApiKeyMissing
+    ? "⚠️ AI Model API Key Required to chat. Click here to configure in Settings..."
+    : placeholder;
+
   return (
     <div className="chat-input-wrapper">
       {/* Ambient Gradient Blur Overlay for scrolling content */}
@@ -48,19 +64,42 @@ export default function ChatInput({
         <textarea
           ref={textareaRef}
           value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
+          onChange={(e) => {
+            if (isApiKeyMissing) {
+              if (onOpenSettings) onOpenSettings();
+              return;
+            }
+            setInputText(e.target.value);
+          }}
+          onClick={handleInputClick}
           onKeyDown={handleKeyDown}
-          placeholder={placeholder}
+          placeholder={resolvedPlaceholder}
           rows={1}
           className="chat-textarea"
           disabled={isGenerating}
         />
 
         {/* Dynamic Action Button:
-            - When idle: Circular royal blue send button with paper airplane
+            - When key missing: Red key button that prompts settings
             - When generating: Circular red button with stop icon to terminate session
+            - When idle: Circular royal blue send button with paper airplane
         */}
-        {isGenerating ? (
+        {isApiKeyMissing ? (
+          <button
+            type="button"
+            className="btn-circular-action"
+            style={{
+              background: "linear-gradient(135deg, #ef4444, #dc2626)",
+              color: "#fff",
+              boxShadow: "0 2px 8px rgba(239, 68, 68, 0.4)",
+            }}
+            onClick={onOpenSettings}
+            title="AI Model API Key Required (Click to configure)"
+            aria-label="Configure API Key"
+          >
+            <Key size={16} />
+          </button>
+        ) : isGenerating ? (
           <button
             type="button"
             className="btn-circular-action btn-terminate-generation"

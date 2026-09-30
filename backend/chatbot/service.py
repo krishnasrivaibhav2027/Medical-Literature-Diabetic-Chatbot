@@ -53,6 +53,81 @@ def _extract_text(raw) -> str:
         )
     return raw if isinstance(raw, str) else str(raw)
 
+
+def format_llm_error_message(e: Exception) -> str:
+    """
+    Format upstream LLM exceptions into clear, actionable advice for the user.
+    """
+    err_str = str(e)
+    err_lower = err_str.lower()
+
+    # 1. Model Not Found (404)
+    if (
+        "404" in err_str
+        or "not_found" in err_lower
+        or "does not exist" in err_lower
+        or "model_not_found" in err_lower
+    ):
+        return (
+            "The configured AI model was not found by the API provider (404 Not Found). "
+            "This usually happens when an invalid model name is specified or the provider has retired it. "
+            "Please switch to another AI model (e.g., OpenAI GPT-4o, Groq Llama 3.3, or Cohere Command A) in Model Settings."
+        )
+
+    # 2. Authentication / API Key issues (401 / 403)
+    if (
+        "401" in err_str
+        or "403" in err_str
+        or "invalid_api_key" in err_lower
+        or "incorrect api key" in err_lower
+        or "unauthorized" in err_lower
+        or "authentication" in err_lower
+    ):
+        return (
+            "The AI model provider rejected the request due to an invalid or missing API key (401/403 Unauthorized). "
+            "Please verify your API key in Model Settings or switch to a different AI service or system default."
+        )
+
+    # 3. Rate Limit / Quota Exceeded (429)
+    if (
+        "429" in err_str
+        or "rate_limit" in err_lower
+        or "quota" in err_lower
+        or "too many requests" in err_lower
+        or "insufficient_quota" in err_lower
+    ):
+        return (
+            "The AI provider's rate limit or usage quota was exceeded (429 Too Many Requests). "
+            "Please switch to a different AI model provider (such as Groq Cloud or OpenAI) in Model Settings, or try again in a few moments."
+        )
+
+    # 4. Service Unavailable / Provider Outage (500 / 502 / 503 / 504)
+    if any(code in err_str for code in ["500", "502", "503", "504"]) or any(k in err_lower for k in ["overloaded", "bad gateway", "service unavailable", "internalservererror"]):
+        return (
+            "The AI provider is temporarily unavailable or experiencing high traffic (5xx Server Error). "
+            "Please switch to an alternative AI model or provider in Model Settings, or try again in a moment."
+        )
+
+    # 5. Connection / Timeout
+    if any(k in err_lower for k in ["timeout", "timed out", "connection", "connecterror"]):
+        return (
+            "Network timeout connecting to the AI provider. "
+            "Please check your internet connection or switch to another AI provider in Model Settings."
+        )
+
+    # 6. Fallback with cleaned error detail
+    clean_msg = err_str
+    if "Conversation model failed after 5 attempts:" in clean_msg:
+        clean_msg = clean_msg.split("Conversation model failed after 5 attempts:")[-1].strip()
+    if len(clean_msg) > 200:
+        clean_msg = clean_msg[:200] + "..."
+
+    return (
+        f"The AI model provider encountered an issue: {clean_msg}. "
+        "Please select a different AI model or API service in Model Settings."
+    )
+
+
 _llm_semaphore: Optional[asyncio.Semaphore] = None
 
 
@@ -184,6 +259,18 @@ class ChatbotService:
         active_thread_id = f"user_{user_id}_{session_id}"
         start_time = time.perf_counter()
         logger.info("chat_stream | session=%s temp=%s top_p=%s top_k=%s top_n=%s is_regen=%s", session_id, temperature, top_p, top_k, reranker_top_n, is_regenerate)
+
+        # Strict Enforcement: AI Model API key is mandatory to access the chatbot
+        custom_api_key = (request.headers.get("x-llm-api-key") or "").strip() if request else ""
+        if not custom_api_key:
+            logger.warning("Rejecting chat stream: Missing mandatory LLM API key | session=%s", session_id)
+            yield StreamEvent(
+                event="error",
+                data=StreamErrorData(
+                    message="An AI Model API Key is mandatory to use the chatbot. Please open Model Settings and enter your API key to activate access."
+                ).model_dump(),
+            ).model_dump()
+            return
 
         if is_regenerate:
             # Clean up the previous assistant message for this thread so it is replaced
@@ -451,9 +538,10 @@ class ChatbotService:
             return
         except Exception as e:
             logger.error("Stream error | session=%s: %s", session_id, e, exc_info=True)
+            user_facing_error = format_llm_error_message(e)
             yield StreamEvent(
                 event="error",
-                data=StreamErrorData(message="An internal error occurred. Please try again.").model_dump(),
+                data=StreamErrorData(message=user_facing_error).model_dump(),
             ).model_dump()
             return
 
@@ -686,9 +774,10 @@ class ChatbotService:
                 final_state = await app.ainvoke(new_input, config=graph_config)
         except Exception as e:
             logger.error("Chat invocation failed [session=%s]: %s", session_id, e, exc_info=True)
+            user_facing_error = format_llm_error_message(e)
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to generate response. Please try again.",
+                status_code=status.HTTP_502_BAD_GATEWAY if any(c in str(e) for c in ["404", "401", "429", "500", "502", "503"]) else status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=user_facing_error,
             )
 
         intent = final_state.get("intent", "Diabetes")

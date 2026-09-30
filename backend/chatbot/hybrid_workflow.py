@@ -129,19 +129,55 @@ class ChatState(TypedDict):
 
 def resolve_llm_model(state: ChatState):
     """
-    Returns custom BYOK model if user configured API keys, otherwise system default model with fallbacks.
+    Returns custom BYOK model configured with user's mandatory API key.
+    For XKiro BYOK, attaches XKiro fallback models using the user's custom API key.
     """
     custom_api_key = state.get("custom_api_key")
-    if custom_api_key and isinstance(custom_api_key, str) and custom_api_key.strip():
-        custom_base_url = state.get("custom_base_url") or "https://api.openai.com/v1"
-        custom_model = state.get("custom_model") or "gpt-4o-mini"
-        return TiktokenChatOpenAI(
-            model=custom_model,
-            base_url=custom_base_url,
-            api_key=custom_api_key.strip(),
-            temperature=0.2,
-        )
-    return model
+    if not custom_api_key or not isinstance(custom_api_key, str) or not custom_api_key.strip():
+        raise ValueError("AI Model API key is mandatory. Please configure your API key in Model Settings to access the chatbot.")
+
+    custom_base_url = state.get("custom_base_url") or "https://api.openai.com/v1"
+    raw_model = state.get("custom_model")
+    
+    # Sanitize model name if it was accidentally polluted with cache indicator
+    if not raw_model or "precomputed" in str(raw_model).lower() or "cache" in str(raw_model).lower():
+        if "xkiro" in str(custom_base_url).lower():
+            custom_model = "cohere/command-a-reasoning"
+        elif "groq" in str(custom_base_url).lower():
+            custom_model = "llama-3.3-70b-versatile"
+        else:
+            custom_model = "gpt-4o-mini"
+    else:
+        custom_model = str(raw_model).strip()
+
+    primary_custom = TiktokenChatOpenAI(
+        model=custom_model,
+        base_url=custom_base_url,
+        api_key=custom_api_key.strip(),
+        temperature=0.2,
+    )
+
+    # For XKiro BYOK, attach fallbacks using the user's custom API key
+    if "xkiro" in str(custom_base_url).lower():
+        xkiro_fallback_candidates = [
+            "cohere/command-a-reasoning",
+            "mistralai/mistral-medium-3.5",
+            "qwen/qwen3.7-flash:free",
+        ]
+        byok_fallbacks = [
+            TiktokenChatOpenAI(
+                model=fb_model,
+                base_url=custom_base_url,
+                api_key=custom_api_key.strip(),
+                temperature=0.2,
+            )
+            for fb_model in xkiro_fallback_candidates
+            if fb_model != custom_model
+        ]
+        if byok_fallbacks:
+            return primary_custom.with_fallbacks(byok_fallbacks)
+
+    return primary_custom
 
 def format_chat_history(messages: Sequence[BaseMessage], max_turns: int = 6) -> str:
     """Format recent conversation turns into a clean readable string for prompt context."""
@@ -460,7 +496,11 @@ async def diabetes_node(state: ChatState):
         except Exception as e:
             last_err = e
             logger.warning("conversation_node attempt %d failed: %s", attempt + 1, e)
-    raise RuntimeError(f"Conversation model failed after 5 attempts: {last_err}") from last_err
+            err_lower = str(e).lower()
+            if any(k in err_lower for k in ["404", "not_found", "does not exist", "401", "403", "invalid_api_key", "unauthorized"]):
+                # Fast fail on configuration / auth errors without waiting for 5 retry timeouts
+                break
+    raise RuntimeError(f"Conversation model failed after attempts: {last_err}") from last_err
 
 
 workflow = StateGraph(ChatState)

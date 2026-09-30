@@ -164,7 +164,7 @@ export default function Sidebar({
     <aside className="sidebar-container">
       {/* Brand Title with Collapse Button */}
       <div className="sidebar-brand-wrapper">
-        <h1 className="sidebar-brand">Medical Literature Assistant</h1>
+        <h1 className="sidebar-brand">Medical Literature Diabetic Assistant</h1>
         {onToggleCollapse && (
           <button
             className="btn-collapse-sidebar"

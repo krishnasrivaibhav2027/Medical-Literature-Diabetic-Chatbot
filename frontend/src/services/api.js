@@ -364,6 +364,15 @@ export async function streamChatMessage({
           } catch (err) {
             console.warn("Could not parse metadata", err);
           }
+        } else if (eventType === "error") {
+          let errorMsg = "An error occurred with the AI service.";
+          try {
+            const parsedErr = JSON.parse(eventData);
+            errorMsg = parsedErr.message || parsedErr.error || errorMsg;
+          } catch {
+            if (eventData) errorMsg = eventData;
+          }
+          throw new Error(errorMsg);
         }
       }
     }
@@ -486,6 +495,15 @@ export async function streamRegenerateChatMessage({
           } catch (err) {
             console.warn("Could not parse metadata", err);
           }
+        } else if (eventType === "error") {
+          let errorMsg = "An error occurred with the AI service.";
+          try {
+            const parsedErr = JSON.parse(eventData);
+            errorMsg = parsedErr.message || parsedErr.error || errorMsg;
+          } catch {
+            if (eventData) errorMsg = eventData;
+          }
+          throw new Error(errorMsg);
         }
       }
     }

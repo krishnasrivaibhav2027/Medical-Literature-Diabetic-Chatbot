@@ -19,6 +19,8 @@ import {
   Bot,
   X,
   Loader2,
+  AlertTriangle,
+  Sliders,
 } from "lucide-react";
 import { SUGGESTED_PROMPTS } from "../services/greetingGenerator";
 import { contributeResponse } from "../services/api";
@@ -33,6 +35,7 @@ export default function ChatArea({
   isGenerating,
   streamingMessage,
   modelInfo,
+  onOpenSettings,
 }) {
   const messagesEndRef = useRef(null);
   const [copiedId, setCopiedId] = useState(null);
@@ -209,17 +212,52 @@ export default function ChatArea({
                   </div>
                 </div>
 
-                {/* Assistant Markdown Content */}
+                {/* Assistant Markdown Content or Error Card */}
                 <div className="assistant-content-wrapper">
-                  <div className="markdown-prose">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {msg.content}
-                    </ReactMarkdown>
-                  </div>
+                  {msg.isError ? (
+                    <div className="ai-error-card animate-fade-in">
+                      <div className="ai-error-header">
+                        <AlertTriangle size={18} />
+                        <span>AI Model Service Interruption</span>
+                      </div>
+                      <div className="ai-error-body">
+                        <p>{msg.content}</p>
+                      </div>
+                      <div className="ai-error-actions">
+                        {onOpenSettings && (
+                          <button
+                            type="button"
+                            className="btn-error-settings"
+                            onClick={onOpenSettings}
+                            title="Configure AI Models and API Keys"
+                          >
+                            <Sliders size={14} />
+                            <span>Switch AI Model in Settings</span>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="btn-error-retry"
+                          onClick={() => onRegenerate(index)}
+                          disabled={isGenerating}
+                          title="Retry generation"
+                        >
+                          <RotateCw size={14} className={isGenerating ? "animate-spin" : ""} />
+                          <span>Retry Request</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="markdown-prose">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {msg.content}
+                        </ReactMarkdown>
+                      </div>
 
-                  {/* Post-generation Associated Metadata & Sources */}
-                  {(msg.metadata || hasSources) && (
-                    <div className="post-response-meta-container">
+                      {/* Post-generation Associated Metadata & Sources */}
+                      {(msg.metadata || hasSources) && (
+                        <div className="post-response-meta-container">
                       {/* Metadata Badges Bar */}
                       <div className="meta-badges-row">
                         {msg.metadata?.intent && (
@@ -417,10 +455,12 @@ export default function ChatArea({
                       </button>
                     </div>
                   </div>
-                </div>
-              </div>
-            );
-          })}
+                </>
+              )}
+            </div>
+          </div>
+        );
+      })}
 
           {/* Active In-Progress Streaming Message */}
           {isGenerating && streamingMessage && (

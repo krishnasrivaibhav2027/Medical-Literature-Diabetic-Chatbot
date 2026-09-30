@@ -46,7 +46,18 @@ export default function App() {
 
   const [settings, setSettings] = useState(() => {
     const saved = localStorage.getItem("rag_chat_settings");
-    return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (!parsed.model || parsed.model.includes("precomputed") || parsed.model.includes("cache")) {
+          parsed.model = DEFAULT_SETTINGS.model;
+        }
+        return { ...DEFAULT_SETTINGS, ...parsed };
+      } catch {
+        return DEFAULT_SETTINGS;
+      }
+    }
+    return DEFAULT_SETTINGS;
   });
 
   // Dark & Light Mode Theme State
@@ -90,10 +101,16 @@ export default function App() {
     fetchModelInfo().then((info) => {
       if (info && info.model) {
         setModelInfo(info);
-        setSettings((prev) => ({
-          ...prev,
-          model: info.model,
-        }));
+        setSettings((prev) => {
+          const isPolluted = !prev.model || prev.model.includes("precomputed") || prev.model.includes("cache");
+          if (!isPolluted && (prev.api_key || prev.model !== DEFAULT_SETTINGS.model)) {
+            return prev;
+          }
+          return {
+            ...prev,
+            model: info.model,
+          };
+        });
       }
     });
   }, []);
@@ -190,6 +207,13 @@ export default function App() {
   const [isClearAllOpen, setIsClearAllOpen] = useState(false);
   const [isClearingAll, setIsClearingAll] = useState(false);
 
+  // Auto-enforce API key requirement: open SettingsModal if authenticated without an API key
+  useEffect(() => {
+    if (authView === "authenticated" && user && (!settings?.api_key || !settings.api_key.trim())) {
+      setIsSettingsOpen(true);
+    }
+  }, [authView, user, settings?.api_key]);
+
   // Notification Toast state
   const [toast, setToast] = useState(null);
 
@@ -282,8 +306,8 @@ export default function App() {
     setAuthView("authenticated");
     navigate("/chat");
 
-    // Immediately display the BYOK modal popup post creation of an account
-    if (meta.isNewAccount) {
+    // Immediately display the BYOK modal popup post creation of an account or if API key is missing
+    if (meta.isNewAccount || !settings?.api_key || !settings.api_key.trim()) {
       setIsSettingsOpen(true);
     }
 
@@ -443,6 +467,12 @@ export default function App() {
   const handleSendMessage = async (queryText) => {
     if (!queryText.trim() || isGenerating) return;
 
+    if (!settings?.api_key || !settings.api_key.trim()) {
+      showToast("AI Model API Key is mandatory to use the chatbot. Please enter your API key in Model Settings.", "error");
+      setIsSettingsOpen(true);
+      return;
+    }
+
     const token = localStorage.getItem("access_token");
     let targetThreadId = activeThreadId;
     const isNewConversation =
@@ -548,10 +578,6 @@ export default function App() {
               ...prev,
               model: metadata.model,
             }));
-            setSettings((prev) => ({
-              ...prev,
-              model: metadata.model,
-            }));
           }
         },
       });
@@ -636,7 +662,32 @@ export default function App() {
         showToast("Access forbidden: session expired or unauthorized.", "error");
       } else {
         console.error("Chat error:", err);
-        showToast(err.message || "An error occurred during response generation.", "error");
+        const errorContent = err.message || "An unexpected error occurred while communicating with the AI model provider.";
+        const errorAssistantMsg = {
+          id: assistantTempId,
+          role: "assistant",
+          content: errorContent,
+          isError: true,
+          timestamp: new Date().toISOString(),
+          metadata: {
+            thread_id: targetThreadId,
+            intent: "Error",
+            model: settings.model || "Unknown",
+          },
+          sources: [],
+        };
+        setThreads((prev) =>
+          prev.map((t) =>
+            t.thread_id === targetThreadId
+              ? {
+                  ...t,
+                  last_updated: new Date().toISOString(),
+                  messages: [...t.messages, errorAssistantMsg],
+                }
+              : t
+          )
+        );
+        showToast(errorContent, "error");
       }
     } finally {
       setIsGenerating(false);
@@ -654,6 +705,12 @@ export default function App() {
 
   const handleRegenerate = async (assistantIndex) => {
     if (isGenerating || !activeThread) return;
+
+    if (!settings?.api_key || !settings.api_key.trim()) {
+      showToast("AI Model API Key is mandatory to use the chatbot. Please enter your API key in Model Settings.", "error");
+      setIsSettingsOpen(true);
+      return;
+    }
     const messages = activeThread.messages || [];
 
     // Find the user query that triggered this assistant answer
@@ -727,10 +784,6 @@ export default function App() {
               ...prev,
               model: metadata.model,
             }));
-            setSettings((prev) => ({
-              ...prev,
-              model: metadata.model,
-            }));
           }
         },
       });
@@ -798,7 +851,32 @@ export default function App() {
         showToast("Access forbidden: session expired or unauthorized.", "error");
       } else {
         console.error("Regeneration error:", err);
-        showToast(err.message || "An error occurred during response regeneration.", "error");
+        const errorContent = err.message || "An error occurred during response regeneration.";
+        const errorAssistantMsg = {
+          id: assistantTempId,
+          role: "assistant",
+          content: errorContent,
+          isError: true,
+          timestamp: new Date().toISOString(),
+          metadata: {
+            thread_id: activeThreadId,
+            intent: "Error",
+            model: settings.model || "Unknown",
+          },
+          sources: [],
+        };
+        setThreads((prev) =>
+          prev.map((t) =>
+            t.thread_id === activeThreadId
+              ? {
+                  ...t,
+                  last_updated: new Date().toISOString(),
+                  messages: [...baseMessages, errorAssistantMsg],
+                }
+              : t
+          )
+        );
+        showToast(errorContent, "error");
       }
     } finally {
       setIsGenerating(false);
@@ -926,6 +1004,7 @@ export default function App() {
             isGenerating={isGenerating}
             streamingMessage={streamingMessage}
             modelInfo={modelInfo}
+            onOpenSettings={() => setIsSettingsOpen(true)}
           />
 
           {/* Floating Pill Input Bar at Bottom */}
@@ -934,18 +1013,25 @@ export default function App() {
             isGenerating={isGenerating}
             onAbortGeneration={handleAbortGeneration}
             placeholder="What's in your mind?..."
+            isApiKeyMissing={!settings?.api_key || !settings.api_key.trim()}
+            onOpenSettings={() => setIsSettingsOpen(true)}
           />
         </main>
 
         {/* Settings Modal (Temperature, Top_k, Top_p, BYOK, etc.) */}
         <SettingsModal
           isOpen={isSettingsOpen}
-          onClose={() => setIsSettingsOpen(false)}
+          onClose={() => {
+            if (settings?.api_key && settings.api_key.trim()) {
+              setIsSettingsOpen(false);
+            }
+          }}
           settings={settings}
           modelInfo={modelInfo}
           onSaveSettings={(newSettings) => {
             setSettings(newSettings);
-            showToast("Model parameters updated successfully", "success");
+            showToast("Model settings & API key saved successfully", "success");
+            setIsSettingsOpen(false);
           }}
         />
 

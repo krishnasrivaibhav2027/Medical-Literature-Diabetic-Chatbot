@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   X,
   Sliders,
@@ -12,18 +12,60 @@ import {
   Eye,
   EyeOff,
   ShieldCheck,
+  AlertTriangle,
 } from "lucide-react";
 import { DEFAULT_SETTINGS } from "../constants/initialData";
 
+const sanitizeModel = (m, providerId) => {
+  if (!m || m.includes("precomputed") || m.includes("cache")) {
+    if (providerId === "openai") return "gpt-4o";
+    if (providerId === "groq") return "llama-3.3-70b-versatile";
+    return "cohere/command-a-reasoning";
+  }
+  return m;
+};
+
 export default function SettingsModal({ isOpen, onClose, settings, modelInfo, onSaveSettings }) {
   const [activeTab, setActiveTab] = useState("byok"); // "byok" | "parameters"
-  const [formData, setFormData] = useState({
-    ...DEFAULT_SETTINGS,
-    ...settings,
+  const [formData, setFormData] = useState(() => {
+    const merged = { ...DEFAULT_SETTINGS, ...settings };
+    return {
+      ...merged,
+      model: sanitizeModel(merged.model, merged.provider),
+    };
   });
   const [showApiKey, setShowApiKey] = useState(false);
   const [showJinaKey, setShowJinaKey] = useState(false);
   const [savedToast, setSavedToast] = useState(false);
+
+  // Check if API key is missing in saved settings vs current form
+  const isApiKeyMissing = !settings?.api_key || !settings.api_key.trim();
+  const isFormApiKeyEmpty = !formData.api_key || !formData.api_key.trim();
+
+  useEffect(() => {
+    if (isOpen) {
+      const merged = { ...DEFAULT_SETTINGS, ...settings };
+      setFormData({
+        ...merged,
+        model: sanitizeModel(merged.model, merged.provider),
+      });
+      // If user has no API key, always force to BYOK tab
+      if (!settings?.api_key || !settings.api_key.trim()) {
+        setActiveTab("byok");
+      }
+    }
+  }, [isOpen, settings]);
+
+  // Block Escape key if API key is missing
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape" && !isApiKeyMissing) {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isApiKeyMissing, onClose]);
 
   if (!isOpen) return null;
 
@@ -33,7 +75,7 @@ export default function SettingsModal({ isOpen, onClose, settings, modelInfo, on
 
   const handleProviderSelect = (providerId) => {
     let defaultBaseUrl = formData.base_url;
-    let defaultModel = formData.model;
+    let defaultModel = sanitizeModel(formData.model, providerId);
 
     if (providerId === "xkiro") {
       defaultBaseUrl = "https://api.xkiro.com/v1";
@@ -55,10 +97,15 @@ export default function SettingsModal({ isOpen, onClose, settings, modelInfo, on
   };
 
   const handleReset = () => {
-    setFormData({ ...DEFAULT_SETTINGS });
+    setFormData({
+      ...DEFAULT_SETTINGS,
+      model: sanitizeModel(DEFAULT_SETTINGS.model, DEFAULT_SETTINGS.provider),
+      api_key: "",
+    });
   };
 
   const handleSave = () => {
+    if (isFormApiKeyEmpty) return;
     onSaveSettings(formData);
     setSavedToast(true);
     setTimeout(() => {
@@ -68,7 +115,12 @@ export default function SettingsModal({ isOpen, onClose, settings, modelInfo, on
   };
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div
+      className="modal-backdrop"
+      onClick={() => {
+        if (!isApiKeyMissing) onClose();
+      }}
+    >
       <div className="modal-card" style={{ maxWidth: "580px" }} onClick={(e) => e.stopPropagation()}>
         {/* Modal Header */}
         <div className="modal-header">
@@ -78,12 +130,18 @@ export default function SettingsModal({ isOpen, onClose, settings, modelInfo, on
             </div>
             <div>
               <h2 className="modal-title">Model Settings & API Keys</h2>
-              <p className="modal-subtitle">Configure BYOK credentials and Hybrid RAG retrieval pipeline</p>
+              <p className="modal-subtitle">
+                {isApiKeyMissing
+                  ? "⚠️ Mandatory setup: Enter your AI Model API Key to activate the chatbot"
+                  : "Configure BYOK credentials and Hybrid RAG retrieval pipeline"}
+              </p>
             </div>
           </div>
-          <button className="btn-icon-ghost" onClick={onClose} aria-label="Close modal">
-            <X size={20} />
-          </button>
+          {!isApiKeyMissing && (
+            <button className="btn-icon-ghost" onClick={onClose} aria-label="Close modal">
+              <X size={20} />
+            </button>
+          )}
         </div>
 
         {/* Tab Switcher */}
@@ -134,6 +192,27 @@ export default function SettingsModal({ isOpen, onClose, settings, modelInfo, on
         <div className="modal-body" style={{ maxHeight: "65vh", overflowY: "auto", padding: "20px 24px" }}>
           {activeTab === "byok" ? (
             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              {/* Mandatory API Key Alert Banner */}
+              {isApiKeyMissing && (
+                <div style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: "10px",
+                  padding: "12px 14px",
+                  borderRadius: "10px",
+                  background: "rgba(239, 68, 68, 0.1)",
+                  border: "1px solid rgba(239, 68, 68, 0.3)",
+                  fontSize: "0.82rem",
+                  color: "#ef4444",
+                  lineHeight: "1.45"
+                }}>
+                  <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: "2px" }} />
+                  <div>
+                    <strong>Action Required:</strong> An AI Model API key is mandatory to access the chatbot. You cannot close this modal without entering and saving a valid key.
+                  </div>
+                </div>
+              )}
+
               {/* BYOK Info Banner */}
               <div style={{
                 display: "flex",
@@ -148,7 +227,7 @@ export default function SettingsModal({ isOpen, onClose, settings, modelInfo, on
               }}>
                 <ShieldCheck size={20} className="text-primary" style={{ flexShrink: 0, marginTop: "2px" }} />
                 <span>
-                  <strong>Bring Your Own Key (BYOK):</strong> Your API keys are encrypted locally in your browser and passed per request via secure headers. If fields are left blank, the assistant uses the system default server keys.
+                  <strong>Bring Your Own Key (BYOK):</strong> Your API keys are encrypted locally in your browser and passed per request via secure headers.
                 </span>
               </div>
 
@@ -221,10 +300,22 @@ export default function SettingsModal({ isOpen, onClose, settings, modelInfo, on
                 />
               </div>
 
-              {/* LLM API Key */}
+              {/* LLM API Key (Mandatory) */}
               <div className="byok-field-group">
-                <label className="byok-label" htmlFor="byok-api-key">
-                  LLM API Key
+                <label className="byok-label" htmlFor="byok-api-key" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span>
+                    LLM API Key <span style={{ color: "#ef4444", fontWeight: 800 }}>*</span>
+                  </span>
+                  <span style={{
+                    fontSize: "0.72rem",
+                    color: "#ef4444",
+                    fontWeight: 700,
+                    background: "rgba(239, 68, 68, 0.12)",
+                    padding: "2px 8px",
+                    borderRadius: "4px"
+                  }}>
+                    Mandatory
+                  </span>
                 </label>
                 <div className="byok-input-password-wrap">
                   <input
@@ -232,9 +323,10 @@ export default function SettingsModal({ isOpen, onClose, settings, modelInfo, on
                     type={showApiKey ? "text" : "password"}
                     value={formData.api_key || ""}
                     onChange={(e) => handleChange("api_key", e.target.value)}
-                    placeholder="Paste your API key (sk-...)"
+                    placeholder="Enter your AI Model API key (Required to chat)"
                     className="byok-input"
                     autoComplete="off"
+                    style={isFormApiKeyEmpty ? { borderColor: "rgba(239, 68, 68, 0.45)" } : {}}
                   />
                   <button
                     type="button"
@@ -245,13 +337,28 @@ export default function SettingsModal({ isOpen, onClose, settings, modelInfo, on
                     {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
-                <span className="byok-info-note">Leave empty to use the system default server key.</span>
+                <span className="byok-info-note" style={{ color: isFormApiKeyEmpty ? "#ef4444" : "var(--text-muted)", fontWeight: isFormApiKeyEmpty ? 600 : 400 }}>
+                  {isFormApiKeyEmpty
+                    ? "⚠️ Required: You must enter an API key to access the chatbot. The Save button will be enabled once entered."
+                    : "Your API key is securely encrypted in your browser and sent with chat requests."}
+                </span>
               </div>
 
-              {/* Jina Reranker API Key */}
+              {/* Jina Reranker API Key (Optional) */}
               <div className="byok-field-group">
-                <label className="byok-label" htmlFor="byok-jina-key">
-                  Jina AI Reranker API Key (Optional)
+                <label className="byok-label" htmlFor="byok-jina-key" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span>Jina AI Reranker API Key</span>
+                  <span style={{
+                    fontSize: "0.72rem",
+                    color: "var(--text-muted)",
+                    fontWeight: 500,
+                    background: "var(--bg-card)",
+                    border: "1px solid var(--border-light)",
+                    padding: "2px 8px",
+                    borderRadius: "4px"
+                  }}>
+                    Optional
+                  </span>
                 </label>
                 <div className="byok-input-password-wrap">
                   <input
@@ -272,7 +379,7 @@ export default function SettingsModal({ isOpen, onClose, settings, modelInfo, on
                     {showJinaKey ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
-                <span className="byok-info-note">If blank, utilizes the server's Jina Reranker v3.5 with RRF fallback.</span>
+                <span className="byok-info-note">If left blank, utilizes the server's Jina Reranker v3.5 with RRF fallback.</span>
               </div>
             </div>
           ) : (
@@ -471,12 +578,24 @@ export default function SettingsModal({ isOpen, onClose, settings, modelInfo, on
             <span>Reset to Defaults</span>
           </button>
           <div className="footer-actions-right">
-            <button className="btn-ghost" onClick={onClose}>
-              Cancel
-            </button>
-            <button className="btn-primary" onClick={handleSave}>
+            {!isApiKeyMissing && (
+              <button className="btn-ghost" onClick={onClose}>
+                Cancel
+              </button>
+            )}
+            <button
+              className="btn-primary"
+              onClick={handleSave}
+              disabled={isFormApiKeyEmpty}
+              style={
+                isFormApiKeyEmpty
+                  ? { opacity: 0.45, cursor: "not-allowed", filter: "grayscale(0.4)" }
+                  : {}
+              }
+              title={isFormApiKeyEmpty ? "Please enter an AI Model API Key to save" : "Save Changes"}
+            >
               <Check size={16} />
-              <span>{savedToast ? "Saved!" : "Save Changes"}</span>
+              <span>{savedToast ? "Saved!" : (isApiKeyMissing ? "Save & Activate Chatbot" : "Save Changes")}</span>
             </button>
           </div>
         </div>
