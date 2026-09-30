@@ -34,8 +34,8 @@ from backend.core.redis import cache_manager
 async def prewarm_models():
     """
     Cold-Start Model Weight Pre-Warming Hook.
-    Pre-loads google/embeddinggemma-300m and CrossEncoder reranker weights into CPU RAM,
-    and encodes a dummy token at startup so user queries never encounter cold-start latency.
+    Verifies Jina Embeddings v3 API connectivity and pre-warms BM25 sparse index,
+    encoding a dummy token at startup so user queries never encounter cold-start latency.
     """
     import time
     start_t = time.perf_counter()

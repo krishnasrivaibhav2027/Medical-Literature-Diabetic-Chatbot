@@ -168,6 +168,8 @@ async def delete_chat(thread_id: str, current_user: User = Depends(get_current_u
 async def get_model_info():
     """Returns the currently active underlying LLM model and provider dynamically configured on the backend."""
     from backend.chatbot.hybrid_workflow import model
+    from backend.core.config import settings
+
     model_name = getattr(model, "model_name", "cohere/command-a-reasoning")
     base_url = str(getattr(model, "base_url", getattr(model, "openai_api_base", ""))).lower()
     
@@ -180,10 +182,12 @@ async def get_model_info():
     else:
         provider = "LLM Cloud API"
 
+    embedding_model = getattr(settings, "JINA_EMBEDDING_MODEL", "jina-embeddings-v3")
+
     return {
         "model": model_name,
         "provider": provider,
-        "embedding_model": "google/embeddinggemma-300m",
+        "embedding_model": embedding_model,
     }
 
 

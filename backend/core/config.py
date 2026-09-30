@@ -30,8 +30,8 @@ class Settings(BaseSettings):
     LANGCHAIN_PROJECT: str = "hybrid-rag-production"
     LANGCHAIN_ENDPOINT: str = "https://api.smith.langchain.com"
     LOG_LEVEL: str = "INFO"
-    JINA_EMBEDDING_MODEL: str
-    JINA_EMBEDDING_URL: str
+    JINA_EMBEDDING_MODEL: str = "jina-embeddings-v3"
+    JINA_EMBEDDING_URL: str = "https://api.jina.ai/v1/embeddings"
     model_config = SettingsConfigDict(
         env_file = _ENV_FILE,
         env_file_encoding = "utf-8",

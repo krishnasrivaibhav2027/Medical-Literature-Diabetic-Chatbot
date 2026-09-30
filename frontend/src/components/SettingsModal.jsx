@@ -287,7 +287,7 @@ export default function SettingsModal({ isOpen, onClose, settings, modelInfo, on
                   <span className="badge badge-blue">{formData.provider || modelInfo?.provider || "Xkiro Cloud API"}</span>
                 </div>
                 <p className="setting-desc">
-                  Configured model: <code className="code-inline">{formData.model || "cohere/command-a-reasoning"}</code> with <code className="code-inline">{modelInfo?.embedding_model || "google/embeddinggemma-300m"}</code> dense embeddings.
+                  Configured model: <code className="code-inline">{formData.model || "cohere/command-a-reasoning"}</code> with <code className="code-inline">{modelInfo?.embedding_model || "jina-embeddings-v3"}</code> dense embeddings.
                 </p>
               </div>
 

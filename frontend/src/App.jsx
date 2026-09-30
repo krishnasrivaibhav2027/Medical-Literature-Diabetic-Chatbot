@@ -83,7 +83,7 @@ export default function App() {
   const [modelInfo, setModelInfo] = useState(() => ({
     model: settings?.model || "cohere/command-a-reasoning",
     provider: "Xkiro Cloud API",
-    embedding_model: "google/embeddinggemma-300m",
+    embedding_model: "jina-embeddings-v3",
   }));
 
   useEffect(() => {
