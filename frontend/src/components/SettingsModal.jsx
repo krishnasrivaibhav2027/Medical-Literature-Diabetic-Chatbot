@@ -9,17 +9,13 @@ import {
   Layers,
   Zap,
   Key,
-  Globe,
   Eye,
   EyeOff,
   ShieldCheck,
-  Server,
 } from "lucide-react";
 import { DEFAULT_SETTINGS } from "../constants/initialData";
 
 export default function SettingsModal({ isOpen, onClose, settings, modelInfo, onSaveSettings }) {
-  if (!isOpen) return null;
-
   const [activeTab, setActiveTab] = useState("byok"); // "byok" | "parameters"
   const [formData, setFormData] = useState({
     ...DEFAULT_SETTINGS,
@@ -28,6 +24,8 @@ export default function SettingsModal({ isOpen, onClose, settings, modelInfo, on
   const [showApiKey, setShowApiKey] = useState(false);
   const [showJinaKey, setShowJinaKey] = useState(false);
   const [savedToast, setSavedToast] = useState(false);
+
+  if (!isOpen) return null;
 
   const handleChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -142,8 +140,8 @@ export default function SettingsModal({ isOpen, onClose, settings, modelInfo, on
                 gap: "10px",
                 padding: "12px 14px",
                 borderRadius: "12px",
-                background: "rgba(99, 102, 241, 0.08)",
-                border: "1px solid rgba(99, 102, 241, 0.2)",
+                background: "rgba(37, 99, 235, 0.08)",
+                border: "1px solid rgba(37, 99, 235, 0.2)",
                 fontSize: "0.8rem",
                 color: "var(--text-secondary)",
                 lineHeight: "1.45"
@@ -283,10 +281,10 @@ export default function SettingsModal({ isOpen, onClose, settings, modelInfo, on
               <div className="setting-card">
                 <div className="setting-card-header">
                   <div className="setting-label-wrap">
-                    <Cpu size={16} className="text-indigo-600" />
+                    <Cpu size={16} className="text-blue-600" />
                     <span className="setting-name">Underlying Model</span>
                   </div>
-                  <span className="badge badge-indigo">{formData.provider || modelInfo?.provider || "Xkiro Cloud API"}</span>
+                  <span className="badge badge-blue">{formData.provider || modelInfo?.provider || "Xkiro Cloud API"}</span>
                 </div>
                 <p className="setting-desc">
                   Configured model: <code className="code-inline">{formData.model || "cohere/command-a-reasoning"}</code> with <code className="code-inline">{modelInfo?.embedding_model || "google/embeddinggemma-300m"}</code> dense embeddings.
@@ -387,7 +385,7 @@ export default function SettingsModal({ isOpen, onClose, settings, modelInfo, on
           <div className="setting-card">
             <div className="setting-card-header">
               <div className="setting-label-wrap">
-                <Layers size={16} className="text-violet-500" />
+                <Layers size={16} className="text-blue-500" />
                 <span className="setting-name">Reranker Top N Documents</span>
               </div>
               <div className="setting-value-chip">{formData.reranker_top_n} docs</div>

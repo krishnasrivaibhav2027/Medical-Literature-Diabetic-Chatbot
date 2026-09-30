@@ -143,7 +143,7 @@ export default function ChatArea({
               >
                 <div className="suggestion-card-header">
                   <span className="suggestion-tag">{item.tag}</span>
-                  <Sparkles size={14} className="text-indigo-400" />
+                  <Sparkles size={14} className="text-blue-400" />
                 </div>
                 <h4 className="suggestion-card-title">{item.title}</h4>
                 <p className="suggestion-card-desc">{item.prompt}</p>
