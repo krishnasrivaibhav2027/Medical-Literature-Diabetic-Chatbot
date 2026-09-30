@@ -2483,251 +2483,588 @@ html, body {
   overflow: hidden;
 }
 
-.auth-page-root {
+/* ==========================================================================
+   Unauthenticated Root & Top Actions Floating Switch
+   ========================================================================== */
+.app-root-unauthed {
+  min-height: 100vh;
+  width: 100%;
+  position: relative;
+  background-color: var(--bg-app);
+  display: flex;
+  flex-direction: column;
+}
+
+.auth-top-actions {
+  position: fixed;
+  top: 16px;
+  right: 20px;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 3px 6px;
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="dark"] .auth-top-actions {
+  background: rgba(15, 23, 42, 0.75);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+}
+
+/* ==========================================================================
+   Medical Literature Diabetes Chatbot — Split Auth Page (Bluish & Dual-Theme)
+   ========================================================================== */
+.axiom-auth-root {
+  min-height: 100vh;
+  width: 100%;
+  position: relative;
+  background-color: var(--bg-app);
+  display: flex;
+  align-items: stretch;
+  overflow-x: hidden;
+  font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+  box-sizing: border-box;
+  transition: background-color 0.25s ease;
+}
+
+/* Ambient Glow & Floating Geometric Wireframes */
+.axiom-ambient-glow {
+  position: absolute;
+  top: -12%;
+  left: -8%;
+  width: 850px;
+  height: 850px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(37, 99, 235, 0.14) 0%, rgba(37, 99, 235, 0) 65%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.axiom-geo-circle {
+  position: absolute;
+  top: 76px;
+  right: 36%;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 1.5px solid #38BDF8;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.5);
+  pointer-events: none;
+  z-index: 3;
+  opacity: 0.85;
+}
+
+.axiom-geo-cube {
+  position: absolute;
+  bottom: 120px;
+  right: 48%;
+  width: 28px;
+  height: 28px;
+  border: 1.5px solid rgba(59, 130, 246, 0.45);
+  transform: rotate(26deg);
+  pointer-events: none;
+  z-index: 3;
+  border-radius: 3px;
+}
+
+/* ==========================================================================
+   Split Layout with Angled Diagonal Boundary
+   ========================================================================== */
+.axiom-split-layout {
+  display: flex;
+  width: 100%;
+  min-height: 100vh;
+  position: relative;
+  z-index: 1;
+}
+
+/* --------------------------------------------------------------------------
+   LEFT SIDE: Overview & Metrics (Consumes Wider Space)
+   -------------------------------------------------------------------------- */
+.axiom-overview-side {
+  flex: 1.35;
+  position: relative;
+  background: #F8FAFC;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 38px 88px 48px 80px;
+  z-index: 2;
+  margin-right: -60px;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 60px) 100%, 0 100%);
+  transition: background-color 0.25s ease;
+}
+
+/* Slanted Seam SVG Line (Guarantees visible slant in both light & dark mode) */
+.axiom-slanted-seam-wrapper {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 60px;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.axiom-slanted-seam {
   width: 100%;
   height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  overflow-y: auto;
+  display: block;
 }
 
-.auth-card-wrapper {
+.axiom-slanted-seam line {
+  stroke: rgba(2, 132, 199, 0.25);
+  stroke-width: 1px;
+  stroke-linecap: round;
+  filter: none;
+}
+
+.axiom-overview-inner {
+  max-width: 820px;
   width: 100%;
-  max-width: 620px;
-  background: #FFFFFF;
-  border-radius: 28px;
-  border: 1px solid var(--border-subtle);
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.06);
-  padding: 40px 48px 36px 48px;
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  margin-top: -24px;
 }
 
-.auth-brand-header {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 8px;
+/* Brand Icon */
+.axiom-brand-logo-wrap {
+  margin-bottom: 22px;
 }
 
-.auth-sparkle-icon {
-  width: 52px;
-  height: 52px;
-  border-radius: 50%;
-  background: #EEF2FF;
-  border: 1px solid #C7D2FE;
+.axiom-brand-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 14px var(--primary-glow);
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.45);
 }
 
-.auth-brand-title {
-  font-size: 1.55rem;
-  font-weight: 800;
-  letter-spacing: -0.015em;
-  color: #0F172A;
-}
-
-.auth-brand-subtitle {
-  font-size: 0.88rem;
-  color: var(--text-muted);
-  line-height: 1.5;
-  max-width: 460px;
-}
-
-/* Auth Tab Switcher */
-.auth-tab-switch {
-  display: flex;
-  background: #F1F5F9;
-  padding: 4px;
+/* Pill Badge */
+.axiom-pill-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(37, 99, 235, 0.08);
+  border: 1px solid rgba(37, 99, 235, 0.25);
   border-radius: var(--radius-full);
+  padding: 5px 14px;
+  color: #1D4ED8;
+  font-size: 0.78rem;
+  font-weight: 600;
+  align-self: flex-start;
+  margin-bottom: 18px;
+}
+
+.axiom-pill-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #2563EB;
+  box-shadow: 0 0 6px #2563EB;
+}
+
+/* Editorial Title */
+.axiom-main-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: clamp(2.4rem, 3.5vw, 3.5rem);
+  font-weight: 700;
+  color: #0F172A;
+  line-height: 1.1;
+  margin: 0 0 18px 0;
+  letter-spacing: -0.015em;
+}
+
+.axiom-title-italic {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-style: italic;
+  font-weight: 400;
+  color: #2563EB;
+  display: inline-block;
+}
+
+/* High-Level Overview Paragraphs */
+.axiom-overview-paragraphs {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 26px;
+  width: 100%;
+  max-width: 100%;
+}
+
+.axiom-overview-paragraphs p {
+  color: #475569;
+  font-size: 0.94rem;
+  line-height: 1.64;
+  margin: 0;
+}
+
+/* Performance Metrics Row (With TTFT) */
+.axiom-metrics-row {
+  display: flex;
+  align-items: center;
+  gap: 36px;
+  margin-bottom: 28px;
+  flex-wrap: wrap;
+}
+
+.axiom-metric-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.axiom-metric-value {
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: #0F172A;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.axiom-metric-label {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: #64748B;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* Feature Cards Stack */
+.axiom-features-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+  width: 100%;
+  max-width: 100%;
+}
+
+.axiom-feature-card {
+  background: #FFFFFF;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 12px;
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+  transition: all 0.2s ease;
+}
+
+.axiom-feature-card:hover {
+  background: #FFFFFF;
+  border-color: rgba(37, 99, 235, 0.35);
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.08);
+  transform: translateX(2px);
+}
+
+.axiom-feature-icon-box {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: #EFF6FF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.axiom-feature-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #0F172A;
+  margin: 0 0 2px 0;
+}
+
+.axiom-feature-desc {
+  font-size: 0.8rem;
+  color: #64748B;
+  line-height: 1.4;
+  margin: 0;
+}
+
+/* --------------------------------------------------------------------------
+   RIGHT SIDE: Auth Form (Sign In / Create Account)
+   -------------------------------------------------------------------------- */
+.axiom-auth-side {
+  flex: 0.85;
+  background: radial-gradient(circle at 85% 15%, rgba(56, 189, 248, 0.4) 0%, transparent 60%),
+              linear-gradient(145deg, #F0F9FF 0%, #E0F2FE 45%, #BAE6FD 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 56px 48px 56px 72px;
+  position: relative;
+  z-index: 1;
+  transition: background 0.3s ease;
+}
+
+.axiom-auth-inner {
+  width: 100%;
+  max-width: 410px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  border-radius: 20px;
+  padding: 38px 34px;
+  box-shadow: 0 16px 42px rgba(14, 165, 233, 0.16), 0 2px 10px rgba(0, 0, 0, 0.03);
+  transition: max-width 0.25s ease, background 0.3s ease, border-color 0.3s ease;
+}
+
+.axiom-auth-inner.axiom-register-mode {
+  max-width: 475px;
+}
+
+.axiom-auth-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.axiom-auth-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 2.15rem;
+  font-weight: 700;
+  color: #0F172A;
+  margin: 0;
+  letter-spacing: -0.015em;
+}
+
+.axiom-auth-subtitle {
+  font-size: 0.86rem;
+  color: #64748B;
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* Segmented Switcher */
+.axiom-segmented-switch {
+  display: flex;
+  background: rgba(241, 245, 249, 0.9);
+  border: 1px solid #E2E8F0;
+  border-radius: 9px;
+  padding: 4px;
   gap: 4px;
 }
 
-.auth-tab-btn {
+.axiom-segment-btn {
   flex: 1;
-  padding: 9px 16px;
+  height: 38px;
   border: none;
   background: transparent;
-  color: var(--text-muted);
-  font-size: 0.88rem;
+  color: #64748B;
+  font-size: 0.86rem;
   font-weight: 600;
-  border-radius: var(--radius-full);
+  border-radius: 7px;
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.18s ease;
 }
 
-.auth-tab-btn.active {
-  background: #FFFFFF;
-  color: var(--text-main);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+.axiom-segment-btn:hover {
+  color: #0F172A;
 }
 
-/* Auth Error Alert */
-.auth-error-banner {
+.axiom-segment-btn.active {
+  background: #0284C7;
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.35);
+}
+
+/* Error Alert */
+.axiom-error-alert {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   background: #FEF2F2;
   border: 1px solid #FECACA;
-  border-radius: var(--radius-md);
+  border-radius: 8px;
   padding: 10px 14px;
-  color: #B91C1C;
-  font-size: 0.84rem;
+  color: #DC2626;
+  font-size: 0.82rem;
   font-weight: 500;
   line-height: 1.4;
 }
 
-/* Form Groups */
-.auth-form {
+/* Form Fields */
+.axiom-form {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 13px;
 }
 
-.form-group {
+.axiom-field-group {
   display: flex;
   flex-direction: column;
-  gap: 6px;
 }
 
-.form-label-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.form-label {
-  font-size: 0.82rem;
-  font-weight: 700;
-  color: #374151;
-}
-
-.form-label-hint {
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  background: #F3F4F6;
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
-.input-with-icon {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.input-icon-left {
-  position: absolute;
-  left: 14px;
-  color: #9CA3AF;
-  pointer-events: none;
-}
-
-.auth-input {
+.axiom-input {
   width: 100%;
-  height: 44px;
-  padding: 10px 42px 10px 42px;
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-lg);
+  height: 48px;
+  background: #F8FAFC;
+  border: 1px solid #CBD5E1;
+  border-radius: 9px;
+  padding: 0 16px;
   font-size: 0.9rem;
   font-family: inherit;
-  color: var(--text-main);
-  background: #FFFFFF;
+  color: #0F172A;
   outline: none;
+  transition: all 0.18s ease;
+  box-sizing: border-box;
+}
+
+.axiom-input:focus {
+  background: #FFFFFF;
+  border-color: #2563EB;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
+}
+
+.axiom-input::placeholder {
+  color: #94A3B8;
+}
+
+/* Password Field Wrapper & Centered Eye Button */
+.axiom-password-wrap {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.axiom-password-wrap .axiom-input {
+  padding-right: 48px;
+}
+
+.axiom-btn-toggle-eye {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: #64748B;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: color 0.15s ease, background-color 0.15s ease;
+  z-index: 2;
+}
+
+.axiom-btn-toggle-eye:hover {
+  color: #0F172A;
+  background: rgba(37, 99, 235, 0.08);
+}
+
+/* Password Requirements Checklist (Directly under Password Field) */
+.axiom-password-checklist {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px 10px;
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 9px;
+  padding: 10px 14px;
+  margin-top: -3px;
+  margin-bottom: 2px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.axiom-check-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.74rem;
+  color: #94A3B8;
+  font-weight: 500;
   transition: all 0.18s ease;
 }
 
-.auth-input:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
-}
-
-.btn-toggle-password {
-  position: absolute;
-  right: 12px;
-  background: transparent;
-  border: none;
-  color: #9CA3AF;
-  cursor: pointer;
-  padding: 4px;
-  display: flex;
-}
-
-.btn-toggle-password:hover {
-  color: var(--text-main);
-}
-
-/* Password Checklist */
-.password-checklist {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-  background: #F8FAFC;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  padding: 10px 12px;
-  margin-top: -4px;
-}
-
-.check-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.73rem;
-  color: #9CA3AF;
-  font-weight: 500;
-  transition: color 0.15s ease;
-}
-
-.check-item.checked {
+.axiom-check-item.checked {
   color: #059669;
   font-weight: 600;
 }
 
-.check-item.checked svg {
-  color: #10B981;
+.axiom-check-item svg {
+  flex-shrink: 0;
 }
 
-/* Submit Button */
-.btn-auth-submit {
+/* Real-time Confirm Password Match Pill Indicator */
+.axiom-confirm-match-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 7px;
+  margin-top: -3px;
+  margin-bottom: 2px;
+  transition: all 0.2s ease;
+  width: fit-content;
+}
+
+.axiom-confirm-match-pill.matched {
+  background: #ECFDF5;
+  border: 1px solid #A7F3D0;
+  color: #047857;
+}
+
+.axiom-confirm-match-pill.mismatched {
+  background: #FEF2F2;
+  border: 1px solid #FECACA;
+  color: #B91C1C;
+}
+
+/* Submit CTA Button */
+.axiom-btn-submit {
   width: 100%;
   height: 48px;
-  background: var(--primary);
+  background: #2563EB;
   color: #FFFFFF;
   border: none;
-  border-radius: var(--radius-full);
-  font-size: 0.95rem;
-  font-weight: 700;
+  border-radius: 9px;
+  font-size: 0.94rem;
+  font-weight: 600;
   cursor: pointer;
+  transition: all 0.18s ease;
+  margin-top: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  box-shadow: 0 4px 14px var(--primary-glow);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  margin-top: 6px;
 }
 
-.btn-auth-submit:hover:not(:disabled) {
-  background: var(--primary-hover);
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(79, 70, 229, 0.35);
+.axiom-btn-submit:hover:not(:disabled) {
+  background: #1D4ED8;
+  box-shadow: 0 4px 18px rgba(37, 99, 235, 0.4);
 }
 
-.btn-auth-submit:disabled {
-  background: #E5E7EB;
-  color: #9CA3AF;
-  box-shadow: none;
+.axiom-btn-submit:disabled {
+  background: #E2E8F0;
+  color: #94A3B8;
   cursor: not-allowed;
+  box-shadow: none;
 }
 
-.auth-spinner {
+.axiom-spinner {
   width: 20px;
   height: 20px;
   border: 2px solid rgba(255, 255, 255, 0.3);
@@ -2736,19 +3073,270 @@ html, body {
   animation: spin 0.8s linear infinite;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
+/* Footnote & Security */
+.axiom-auth-footnote {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.74rem;
+  color: #64748B;
+  margin-top: 4px;
+  text-align: center;
 }
 
-.auth-footer-badge {
+.axiom-security-badge {
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: 6px;
-  font-size: 0.74rem;
-  color: var(--text-muted);
-  font-weight: 500;
+  color: #475569;
+  font-size: 0.72rem;
 }
+
+/* ==========================================================================
+   Dark Theme Overrides for Axiom Layout (Deep Bluish Theme)
+   ========================================================================== */
+[data-theme="dark"] .axiom-auth-root {
+  background-color: #0B0F19;
+}
+
+[data-theme="dark"] .axiom-overview-side {
+  background: #0D162B;
+}
+
+[data-theme="dark"] .axiom-slanted-seam line {
+  stroke: rgba(96, 165, 250, 0.32);
+  filter: drop-shadow(0 0 2px rgba(59, 130, 246, 0.15));
+}
+
+[data-theme="dark"] .axiom-pill-badge {
+  background: rgba(37, 99, 235, 0.12);
+  border-color: rgba(59, 130, 246, 0.25);
+  color: #93C5FD;
+}
+
+[data-theme="dark"] .axiom-pill-dot {
+  background: #60A5FA;
+  box-shadow: 0 0 6px #60A5FA;
+}
+
+[data-theme="dark"] .axiom-main-title {
+  color: #F8FAFC;
+}
+
+[data-theme="dark"] .axiom-title-italic {
+  color: #60A5FA;
+}
+
+[data-theme="dark"] .axiom-overview-paragraphs p {
+  color: #94A3B8;
+}
+
+[data-theme="dark"] .axiom-metric-value {
+  color: #F8FAFC;
+}
+
+[data-theme="dark"] .axiom-metric-label {
+  color: #64748B;
+}
+
+[data-theme="dark"] .axiom-feature-card {
+  background: rgba(20, 31, 54, 0.65);
+  border-color: rgba(255, 255, 255, 0.06);
+  box-shadow: none;
+}
+
+[data-theme="dark"] .axiom-feature-card:hover {
+  background: rgba(26, 42, 72, 0.85);
+  border-color: rgba(59, 130, 246, 0.3);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .axiom-feature-icon-box {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+[data-theme="dark"] .axiom-feature-title {
+  color: #F8FAFC;
+}
+
+[data-theme="dark"] .axiom-feature-desc {
+  color: #8899AC;
+}
+
+[data-theme="dark"] .axiom-auth-side {
+  background: radial-gradient(circle at 85% 15%, rgba(56, 189, 248, 0.24) 0%, transparent 55%),
+              linear-gradient(145deg, #07152B 0%, #0A2244 50%, #081B36 100%);
+}
+
+[data-theme="dark"] .axiom-auth-inner {
+  background: rgba(11, 23, 44, 0.78);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  border-radius: 20px;
+  padding: 38px 34px;
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.45), 0 0 28px rgba(56, 189, 248, 0.08);
+}
+
+[data-theme="dark"] .axiom-auth-title {
+  color: #F8FAFC;
+}
+
+[data-theme="dark"] .axiom-auth-subtitle {
+  color: #94A3B8;
+}
+
+[data-theme="dark"] .axiom-segmented-switch {
+  background: rgba(8, 17, 34, 0.85);
+  border-color: rgba(56, 189, 248, 0.18);
+}
+
+[data-theme="dark"] .axiom-segment-btn {
+  color: #8094A8;
+}
+
+[data-theme="dark"] .axiom-segment-btn:hover {
+  color: #F8FAFC;
+}
+
+[data-theme="dark"] .axiom-segment-btn.active {
+  background: #0284C7;
+  color: #FFFFFF;
+  box-shadow: 0 2px 10px rgba(2, 132, 199, 0.45);
+}
+
+[data-theme="dark"] .axiom-error-alert {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.25);
+  color: #FCA5A5;
+}
+
+[data-theme="dark"] .axiom-input {
+  background: #131D31;
+  border-color: rgba(255, 255, 255, 0.09);
+  color: #F8FAFC;
+}
+
+[data-theme="dark"] .axiom-input:focus {
+  background: #15223A;
+  border-color: #3B82F6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+}
+
+[data-theme="dark"] .axiom-input::placeholder {
+  color: #5A6D82;
+}
+
+[data-theme="dark"] .axiom-btn-toggle-eye {
+  color: #64748B;
+}
+
+[data-theme="dark"] .axiom-btn-toggle-eye:hover {
+  color: #F8FAFC;
+  background: rgba(59, 130, 246, 0.15);
+}
+
+[data-theme="dark"] .axiom-password-checklist {
+  background: #111A2E;
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="dark"] .axiom-check-item {
+  color: #556980;
+}
+
+[data-theme="dark"] .axiom-check-item.checked {
+  color: #34D399;
+}
+
+[data-theme="dark"] .axiom-confirm-match-pill.matched {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.3);
+  color: #34D399;
+}
+
+[data-theme="dark"] .axiom-confirm-match-pill.mismatched {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #F87171;
+}
+
+[data-theme="dark"] .axiom-btn-submit {
+  background: #2563EB;
+}
+
+[data-theme="dark"] .axiom-btn-submit:hover:not(:disabled) {
+  background: #1D4ED8;
+  box-shadow: 0 4px 18px rgba(37, 99, 235, 0.5);
+}
+
+[data-theme="dark"] .axiom-btn-submit:disabled {
+  background: #1C273D;
+  color: #556980;
+}
+
+[data-theme="dark"] .axiom-auth-footnote {
+  color: #556980;
+}
+
+[data-theme="dark"] .axiom-security-badge {
+  color: #718096;
+}
+
+/* ==========================================================================
+   Responsive Adaptations for Axiom Layout
+   ========================================================================== */
+@media (max-width: 1100px) {
+  .axiom-split-layout {
+    flex-direction: column;
+  }
+
+  .axiom-overview-side {
+    margin-right: 0;
+    clip-path: none;
+    padding: 48px 32px 40px 32px;
+  }
+
+  .axiom-slanted-seam-wrapper {
+    display: none;
+  }
+
+  .axiom-geo-circle,
+  .axiom-geo-cube {
+    display: none;
+  }
+
+  .axiom-auth-side {
+    padding: 40px 24px 56px 24px;
+  }
+
+  .axiom-overview-inner,
+  .axiom-auth-inner {
+    max-width: 680px;
+    margin: 0 auto;
+  }
+}
+
+@media (max-width: 600px) {
+  .axiom-overview-side {
+    padding: 36px 20px 32px 20px;
+  }
+
+  .axiom-metrics-row {
+    gap: 20px;
+  }
+
+  .axiom-metric-value {
+    font-size: 1.5rem;
+  }
+
+  .axiom-auth-side {
+    padding: 32px 18px 48px 18px;
+  }
+}
+
 
 /* Avatar Circle & Letter Styling */
 .user-avatar-circle {
