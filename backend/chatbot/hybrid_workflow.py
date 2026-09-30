@@ -2,8 +2,8 @@ import psycopg
 import logging
 import asyncio as _asyncio
 from psycopg_pool import AsyncConnectionPool
-from pathlib import Path
-from sentence_transformers import SentenceTransformer
+import requests
+import numpy as np
 from sqlalchemy import select
 from backend.core.database import AsyncSessionLocal
 from backend.chatbot.models import DocumentChunk
@@ -56,17 +56,49 @@ FALL_BACK_MODELS = [
 
 model = PRIMARY_MODEL.with_fallbacks(FALL_BACK_MODELS)
 
-_embedding_model: Optional[SentenceTransformer] = None
+class JinaEmbedder:
+    """Lightweight embedder calling Jina Embeddings v3 API (768d)."""
+    def encode(self, texts, task: str = "retrieval.query", batch_size: int = 64, **kwargs) -> np.ndarray:
+        is_single = isinstance(texts, str)
+        input_list = [texts] if is_single else list(texts)
+        if not input_list:
+            return np.zeros((768,), dtype=np.float32) if is_single else np.empty((0, 768), dtype=np.float32)
 
-def get_embedding_model() -> SentenceTransformer:
-    """Lazy-load and return the cached SentenceTransformer singleton."""
-    global _embedding_model
-    if _embedding_model is None:
-        import os
-        logger.info("Initializing SentenceTransformer('google/embeddinggemma-300m')...")
-        hf_token = getattr(settings, "HUGGING_FACE_TOKEN", None) or os.getenv("HF_TOKEN") or os.getenv("HUGGING_FACE_TOKEN")
-        _embedding_model = SentenceTransformer("google/embeddinggemma-300m", token=hf_token)
-    return _embedding_model
+        headers = {
+            "Authorization": f"Bearer {settings.JINA_API_KEY}",
+            "Content-Type": "application/json",
+        }
+        all_embeddings = []
+        for i in range(0, len(input_list), batch_size):
+            batch = input_list[i : i + batch_size]
+            payload = {
+                "model": getattr(settings, "JINA_EMBEDDING_MODEL", "jina-embeddings-v3"),
+                "task": task,
+                "dimensions": 768,
+                "input": batch,
+            }
+            resp = requests.post(
+                getattr(settings, "JINA_EMBEDDING_URL", "https://api.jina.ai/v1/embeddings"),
+                headers=headers,
+                json=payload,
+                timeout=60,
+            )
+            resp.raise_for_status()
+            data = sorted(resp.json().get("data", []), key=lambda x: x["index"])
+            all_embeddings.extend([d["embedding"] for d in data])
+
+        arr = np.array(all_embeddings, dtype=np.float32)
+        return arr[0] if is_single else arr
+
+
+_jina_embedder: Optional[JinaEmbedder] = None
+
+def get_embedding_model() -> JinaEmbedder:
+    """Lazy-load and return the cached JinaEmbedder singleton."""
+    global _jina_embedder
+    if _jina_embedder is None:
+        _jina_embedder = JinaEmbedder()
+    return _jina_embedder
 
 def __getattr__(name: str):
     """Fallback for backwards-compatible access to embedding_model."""

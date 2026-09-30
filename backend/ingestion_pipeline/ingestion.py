@@ -3,7 +3,6 @@ import asyncio
 from pathlib import Path
 from typing import List, Tuple
 import numpy as np
-from sentence_transformers import SentenceTransformer
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy import select, func
 
@@ -17,10 +16,10 @@ from backend.ingestion_pipeline.text_splitting import process_pdf
 from backend.core.database import AsyncSessionLocal, create_tables
 from backend.chatbot.models import DocumentChunk
 from backend.chatbot.bm25 import invalidate_bm25_cache
+from backend.core.config import settings
+import requests
 
 KNOWLEDGE_BASE_DIR = Path.joinpath(Path(__file__).parent.parent, "knowledge_base")
-
-embedding_model = SentenceTransformer("google/embeddinggemma-300m")
 
 
 def ingest_knowledge_base(knowledge_base_dir = KNOWLEDGE_BASE_DIR):
@@ -38,11 +37,25 @@ def ingest_knowledge_base(knowledge_base_dir = KNOWLEDGE_BASE_DIR):
             docs = process_pdf(str(pdf_path))
             texts = [doc.page_content for doc in docs]
             print(f"\nCreating Embeddings for the chunked documents for doc {i}...")
-            embeddings = embedding_model.encode(texts, show_progress_bar=True, batch_size=32)
+
+            resp = requests.post(
+                settings.JINA_EMBEDDING_URL,
+                headers={"Authorization": f"Bearer {settings.JINA_API_KEY}"},
+                json={
+                    "model": settings.JINA_EMBEDDING_MODEL,
+                    "task": "retrieval.passage",
+                    "dimensions": 768,
+                    "input": texts,
+                },
+                timeout=60,
+            )
+            resp.raise_for_status()
+            embeddings = [d["embedding"] for d in sorted(resp.json()["data"], key=lambda x: x["index"])]
+
             all_docs.extend(docs)
             all_embeddings.append(embeddings)
 
-            print(f"  {len(docs)} chunks, {embeddings.shape[1]}d embeddings")
+            print(f"  {len(docs)} chunks, {len(embeddings[0])}d embeddings")
         except Exception as e:
             print(f"  Failed to process {pdf_path.name}: {e}")
             continue
@@ -123,7 +136,9 @@ async def save_chunks_to_postgres(docs, embeddings):
 
 
 if __name__ == "__main__":
-    print("Starting ingestion pipeline...")
+    if sys.platform == "win32":
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    print("Starting ingestion pipeline with Jina Embeddings v3...")
     docs, embeddings = ingest_knowledge_base()
     if len(docs) == 0:
         print("No documents ingested. Exiting.")

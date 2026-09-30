@@ -41,14 +41,10 @@ async def prewarm_models():
     start_t = time.perf_counter()
     logger.info("Starting model weight pre-warming hook...")
 
-    # 1. Warm up SentenceTransformer ('google/embeddinggemma-300m')
-    hf_token = getattr(settings, "HUGGING_FACE_TOKEN", None) or os.getenv("HF_TOKEN")
-    if hf_token:
-        os.environ["HF_TOKEN"] = hf_token
-    model = get_embedding_model()
-    # Execute dummy inference in a separate thread so the async event loop is never blocked
-    await asyncio.to_thread(model.encode, "dummy warmup query token", show_progress_bar=False)
-    logger.info("SentenceTransformer('google/embeddinggemma-300m') pre-warmed with dummy token.")
+    # 1. Verify Jina Embeddings v3 API readiness
+    embedder = get_embedding_model()
+    test_emb = await asyncio.to_thread(embedder.encode, "dummy warmup query token")
+    logger.info("Jina Embeddings v3 API ready (verified %d-dim vector).", len(test_emb))
 
     # 2. Pre-warm BM25 sparse index from PostgreSQL into in-memory cache
     try:
